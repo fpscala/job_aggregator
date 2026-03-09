@@ -21,6 +21,7 @@ class Settings(BaseModel):
     kafka_queue_size: int = 1000
     parser_concurrency: int = 50
     log_level: str = "INFO"
+    kafka_log_level: str = "WARNING"
     parsers_path: Path = Field(
         default_factory=lambda: Path(__file__).resolve().parent / "parsers",
     )
@@ -60,6 +61,7 @@ class Settings(BaseModel):
             kafka_queue_size=max(1, int(os.getenv("KAFKA_QUEUE_SIZE", "1000"))),
             parser_concurrency=max(1, int(os.getenv("PARSER_CONCURRENCY", "50"))),
             log_level=os.getenv("LOG_LEVEL", "INFO"),
+            kafka_log_level=os.getenv("KAFKA_LOG_LEVEL", "WARNING"),
             parsers_path=parsers_path,
         )
 
@@ -70,11 +72,15 @@ def load_settings() -> Settings:
     return Settings.from_env()
 
 
-def configure_logging(level: str) -> None:
+def configure_logging(level: str, kafka_level: str = "WARNING") -> None:
     logging.basicConfig(
         level=getattr(logging, level.upper(), logging.INFO),
         format="%(asctime)s %(levelname)s [%(name)s] %(message)s",
     )
+
+    resolved_kafka_level = getattr(logging, kafka_level.upper(), logging.WARNING)
+    logging.getLogger("kafka").setLevel(resolved_kafka_level)
+    logging.getLogger("kafka.conn").setLevel(resolved_kafka_level)
 
 
 def load_dotenv(dotenv_path: Path | None = None) -> None:

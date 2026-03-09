@@ -5,7 +5,7 @@ import cats.implicits._
 import fs2.Stream
 import org.typelevel.log4cats.Logger
 
-import uz.scala.algebras.InsertResult
+import uz.scala.domain.enums.InsertResult
 import uz.scala.algebras.JobsAlgebra
 import uz.scala.domain.events.RawJob
 import uz.scala.kafka.Source

@@ -30,6 +30,7 @@ Qo'shimcha foydali envlar:
 - `KAFKA_WORKER_COUNT` - publisher workerlar soni
 - `KAFKA_QUEUE_SIZE` - producer queue hajmi
 - `LOG_LEVEL` - log darajasi
+- `KAFKA_LOG_LEVEL` - `kafka-python` log darajasi, default `WARNING`
 
 ## Virtual environment
 

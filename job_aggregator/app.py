@@ -15,7 +15,7 @@ logger = logging.getLogger(__name__)
 
 async def main() -> None:
     settings = load_settings()
-    configure_logging(settings.log_level)
+    configure_logging(settings.log_level, settings.kafka_log_level)
 
     loader = PluginLoader(settings.parsers_path)
     registrations = loader.load()

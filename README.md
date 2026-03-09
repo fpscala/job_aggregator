@@ -65,6 +65,7 @@ export TELEGRAM_PHONE=+998901234567
 export TELEGRAM_LOGIN_METHOD=code
 export TELEGRAM_SESSION=job_aggregator.session
 export KAFKA_BOOTSTRAP_SERVERS=localhost:9092
+export KAFKA_LOG_LEVEL=WARNING
 python -m job_aggregator.app
 ```
 

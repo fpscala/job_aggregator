@@ -1,6 +1,6 @@
 package uz.scala.domain.events
 
-import java.time.OffsetDateTime
+import java.time.ZonedDateTime
 
 import io.circe.generic.extras.Configuration
 import io.circe.generic.extras.ConfiguredJsonCodec
@@ -16,7 +16,7 @@ final case class RawJob(
     location: Option[String],
     source: String,
     url: String,
-    postedAt: OffsetDateTime,
+    postedAt: ZonedDateTime,
   ) extends KafkaEvent {
   override def eventType: String = "jobs.raw"
 }
