@@ -22,6 +22,6 @@ object Algebras {
       xa: Transactor[F]
     ): Algebras[F] =
     Algebras(
-      jobs = JobsAlgebra.make[F](repositories.jobs)
+      jobs = JobsAlgebra.make[F](repositories.jobs, repositories.jobChannelPosts)
     )
 }

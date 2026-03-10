@@ -17,6 +17,7 @@ final case class RawJob(
     source: String,
     url: String,
     postedAt: ZonedDateTime,
+    contactLinks: Option[List[String]],
   ) extends KafkaEvent {
   override def eventType: String = "jobs.raw"
 }

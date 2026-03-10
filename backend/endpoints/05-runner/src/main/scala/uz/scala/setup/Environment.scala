@@ -20,6 +20,7 @@ import uz.scala.doobie.DoobieTransaction
 import uz.scala.flyway.Migrations
 import uz.scala.http.{ Environment => HttpEnvironment }
 import uz.scala.kafka.Topics
+import uz.scala.telegram.TelegramChannelPublisher
 import uz.scala.utils.ConfigLoader
 
 final case class Environment[F[_]](
@@ -27,6 +28,7 @@ final case class Environment[F[_]](
     repositories: Repositories[ConnectionIO],
     algebras: Algebras[F],
     listeners: Listeners[F],
+    telegramPublisher: TelegramChannelPublisher[F],
   )(implicit
     val async: Async[F],
     val xa: Transactor[F],
@@ -40,7 +42,9 @@ final case class Environment[F[_]](
 
   lazy val toJobs: JobsEnvironment[F] =
     JobsEnvironment(
-      algebras = algebras
+      algebras = algebras,
+      telegramPublisher = telegramPublisher,
+      telegram = config.telegram,
     )
 }
 
@@ -55,6 +59,7 @@ object Environment {
       implicit0(random: Random[F]) <- Resource.eval(Random.scalaUtilRandom[F])
       implicit0(lifter: (F ~> ConnectionIO)) <- WeakAsync.liftK[F, ConnectionIO]
       topics <- Topics.make[F](config.kafka)
+      telegramPublisher <- TelegramChannelPublisher.resource[F](config.telegram)
       algebras = Algebras.make[F](repositories, config.api.maxLimit)
       listeners = Listeners.make[F](topics, algebras.jobs)
       env = Environment[F](
@@ -62,6 +67,7 @@ object Environment {
         repositories = repositories,
         algebras = algebras,
         listeners = listeners,
+        telegramPublisher = telegramPublisher,
       )
     } yield env
 }

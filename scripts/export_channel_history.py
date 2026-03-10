@@ -13,6 +13,7 @@ if str(PROJECT_ROOT) not in sys.path:
 from telethon import TelegramClient
 
 from job_aggregator.config import load_dotenv, load_settings
+from job_aggregator.core.parser_base import build_message_url, extract_message_contact_links
 
 
 def parse_args() -> argparse.Namespace:
@@ -53,6 +54,12 @@ async def main() -> None:
                 "id": message.id,
                 "date": message.date.isoformat() if message.date else None,
                 "text": (message.raw_text or "").strip(),
+                "url": build_message_url(message, fallback_channel=args.channel),
+                "contact_links": extract_message_contact_links(
+                    message,
+                    source_channel_names=(args.channel, getattr(entity, "username", "")),
+                    message_url=build_message_url(message, fallback_channel=args.channel),
+                ),
                 "views": getattr(message, "views", None),
                 "forwards": getattr(message, "forwards", None),
                 "channel": args.channel,

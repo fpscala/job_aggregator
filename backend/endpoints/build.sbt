@@ -22,6 +22,10 @@ lazy val `endpoints-repos` =
 lazy val `endpoints-core` =
   project
     .in(file("02-core"))
+    .settings(
+      libraryDependencies ++=
+        Dependencies.com.disneystreaming.all.map(_ % Test)
+    )
     .dependsOn(
       `endpoints-repos`,
       LocalProject("support_redis"),

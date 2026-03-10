@@ -4,18 +4,28 @@ import unittest
 from datetime import datetime, timezone
 from types import SimpleNamespace
 
+from telethon.tl.types import MessageEntityTextUrl
+
 from job_aggregator.core.parser_base import ParserConfig
 from job_aggregator.parsers.xorazm_ish.parser import Parser
 
 
 class FakeMessage:
-    def __init__(self, text: str, message_id: int = 1) -> None:
+    def __init__(
+        self,
+        text: str,
+        message_id: int = 1,
+        entities: list[object] | None = None,
+        contact_links: list[str] | None = None,
+    ) -> None:
         self.raw_text = text
         self.message = text
         self.id = message_id
         self.date = datetime(2026, 3, 1, 10, 0, tzinfo=timezone.utc)
         self.chat = SimpleNamespace(username="Xorazm_ish")
         self.chat_id = -1001234567890
+        self.entities = entities or []
+        self.contact_links = contact_links
 
 
 class XorazmParserTestCase(unittest.TestCase):
@@ -44,6 +54,7 @@ class XorazmParserTestCase(unittest.TestCase):
         self.assertEqual(job.salary, "3 000 000 + bonus")
         self.assertEqual(job.source, "xorazm_ish")
         self.assertEqual(job.url, "https://t.me/Xorazm_ish/1")
+        self.assertIsNone(job.contact_links)
 
     def test_parses_multi_role_post(self) -> None:
         message = FakeMessage(
@@ -121,6 +132,28 @@ class XorazmParserTestCase(unittest.TestCase):
     def test_skips_non_job_post(self) -> None:
         message = FakeMessage("Kanalimizga obuna bo'ling va do'stlaringizga ulashing")
         self.assertIsNone(self.parser.parse(message))
+
+    def test_extracts_hidden_contact_link_and_skips_source_channel_link(self) -> None:
+        text = """
+            #ish
+            Test kompaniyasiga operator ishga taklif qilinadi.
+            Ariza topshirish:
+            👤 Onlayn anketa
+            """
+        offset = text.index("Onlayn anketa")
+        message = FakeMessage(
+            text,
+            entities=[
+                MessageEntityTextUrl(offset=offset, length=len("Onlayn anketa"), url="https://forms.gle/example"),
+                MessageEntityTextUrl(offset=0, length=4, url="https://t.me/Xorazm_ish"),
+            ],
+        )
+
+        job = self.parser.parse(message)
+
+        self.assertIsNotNone(job)
+        assert job is not None
+        self.assertEqual(job.contact_links, ["https://forms.gle/example"])
 
 
 if __name__ == "__main__":

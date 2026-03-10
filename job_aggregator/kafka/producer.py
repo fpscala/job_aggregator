@@ -91,7 +91,7 @@ class KafkaJobProducer:
         if self._producer is None:
             raise RuntimeError("Kafka producer has not been started")
 
-        payload = job.model_dump(mode="json")
+        payload = job.model_dump(mode="json", exclude_none=True)
         loop = asyncio.get_running_loop()
         metadata = await loop.run_in_executor(None, self._send_sync, payload)
         logger.info(

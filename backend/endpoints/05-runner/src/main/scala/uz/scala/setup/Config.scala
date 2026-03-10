@@ -7,6 +7,7 @@ import uz.scala.jobs.JobsRunnerConfig
 import uz.scala.kafka.KafkaConfig
 import uz.scala.mailer.MailerConfig
 import uz.scala.redis.RedisConfig
+import uz.scala.telegram.TelegramConfig
 
 case class Config(
     http: HttpServerConfig,
@@ -16,6 +17,7 @@ case class Config(
     mailer: MailerConfig,
     kafka: KafkaConfig,
     api: Config.Api,
+    telegram: TelegramConfig,
   ) {
   lazy val migrations: MigrationsConfig = MigrationsConfig(
     hostname = database.host.value,

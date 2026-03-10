@@ -22,6 +22,7 @@ class ExportedMessage:
     raw_text: str
     date: datetime
     channel: str
+    contact_links: list[str] | None = None
 
     @property
     def message(self) -> str:
@@ -68,6 +69,7 @@ def main() -> None:
                 raw_text=(record.get("text") or "").strip(),
                 date=_parse_datetime(record.get("date")),
                 channel=record.get("channel") or registrations[args.plugin].channel,
+                contact_links=record.get("contact_links"),
             )
             job = parser.parse(message)
             if job is None:

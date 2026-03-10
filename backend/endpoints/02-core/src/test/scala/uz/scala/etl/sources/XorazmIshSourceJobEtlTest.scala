@@ -1,0 +1,273 @@
+package uz.scala.etl.sources
+
+import java.time.ZoneId
+import java.time.ZonedDateTime
+import java.util.UUID
+
+import weaver.SimpleIOSuite
+
+import uz.scala.domain.events.RawJob
+import uz.scala.domain.jobs.JobDetails
+import uz.scala.repos.dto
+
+object XorazmIshSourceJobEtlTest extends SimpleIOSuite {
+  private val postedAt =
+    ZonedDateTime.of(2026, 3, 1, 10, 0, 0, 0, ZoneId.of("Asia/Samarkand"))
+
+  pureTest("filters source channel and keeps hidden application links") {
+    val rawJob =
+      RawJob(
+        title = "operator",
+        company = Some("Test kompaniyasi"),
+        description =
+          """#ish
+            |Test kompaniyasiga operator ishga taklif qilinadi.
+            |
+            |Ariza topshirish:
+            |👤 Onlayn anketa
+            |
+            |👉 @Xorazm_ish""".stripMargin,
+        salary = None,
+        location = None,
+        source = "xorazm_ish",
+        url = "https://t.me/Xorazm_ish/123",
+        postedAt = postedAt,
+        contactLinks = Some(List("https://forms.gle/apply", "https://t.me/Xorazm_ish")),
+      )
+
+    val details = XorazmIshSourceJobEtl.enrich(rawJob)
+
+    expect.same(Some("Onlayn anketa"), details.contactText) &&
+    expect.same(List("https://forms.gle/apply"), details.contactLinks) &&
+    expect.same(List.empty[String], details.contactTelegramUsernames) &&
+    expect(details.hasContacts)
+  }
+
+  pureTest("marks posts without real contact information as invalid") {
+    val rawJob =
+      RawJob(
+        title = "ishchilar",
+        company = Some("Firma"),
+        description =
+          """#ish
+            |Firma ishchilar ishga taklif qilinadi.
+            |
+            |Talablar:
+            |• Mas'uliyatli bo'lishi kerak
+            |
+            |👉 @Xorazm_ish""".stripMargin,
+        salary = None,
+        location = None,
+        source = "xorazm_ish",
+        url = "https://t.me/Xorazm_ish/124",
+        postedAt = postedAt,
+        contactLinks = None,
+      )
+
+    val details = XorazmIshSourceJobEtl.enrich(rawJob)
+
+    expect(!details.hasContacts) &&
+    expect.same(None, details.contactText) &&
+    expect.same(List.empty[String], details.contactPhoneNumbers) &&
+    expect.same(List.empty[String], details.contactTelegramUsernames) &&
+    expect.same(List.empty[String], details.contactLinks)
+  }
+
+  pureTest("extracts responsibilities, benefits, and additional blocks") {
+    val rawJob =
+      RawJob(
+        title = "administrator",
+        company = Some("Test"),
+        description =
+          """#ish
+            |Test kompaniyasiga administrator ishga taklif qilinadi.
+            |
+            |Talablar:
+            |• Kompyuterda ishlay olishi
+            |
+            |Vazifalar:
+            |• Mijozlar bilan ishlash
+            |• Hisobot yuritish
+            |
+            |Biz taklif qilamiz:
+            |✓ Raqobatbardosh ish haqqi
+            |✓ Tushlik ish xona hisobidan
+            |✓ Rasmiy ishga kirish
+            |
+            |Ish vaqti: 09:00 - 18:00
+            |✓ Tajribasiga yo'q ammo yaxshi nomzodlarga soha o'rgatiladi
+            |
+            |Tel: +998901112233
+            |👉 @Xorazm_ish""".stripMargin,
+        salary = None,
+        location = None,
+        source = "xorazm_ish",
+        url = "https://t.me/Xorazm_ish/125",
+        postedAt = postedAt,
+        contactLinks = None,
+      )
+
+    val details = XorazmIshSourceJobEtl.enrich(rawJob)
+
+    expect.same(Some("Mijozlar bilan ishlash\nHisobot yuritish"), details.responsibilities) &&
+    expect.same(
+      Some("Raqobatbardosh ish haqqi\nTushlik ish xona hisobidan\nRasmiy ishga kirish"),
+      details.benefits,
+    ) &&
+    expect.same(
+      Some("Tajribasiga yo'q ammo yaxshi nomzodlarga soha o'rgatiladi"),
+      details.additional,
+    )
+  }
+
+  pureTest("keeps only real schedule lines in work schedule") {
+    val rawJob =
+      RawJob(
+        title = "operator",
+        company = Some("Test"),
+        description =
+          """#ish
+            |Kompaniyaga operatorlar ishga taklif qilinadi.
+            |
+            |Ish vaqti: To'liq stavka ish
+            |09:00 - 14:00 (1-smena)
+            |14:00 - 22:30 (2-smena)
+            |
+            |Oylik suhbat asosida kelishiladi
+            |Qo'shimcha ma'lumotlar uchun hoziroq pastdagi havolani bosib anketani to'ldiring sizga o'zimiz bog'lanamiz
+            |USTIGA BOSING
+            |http://zokadr.uz/finliteishanketa
+            |
+            |Tel: +998901112233
+            |👉 @Xorazm_ish""".stripMargin,
+        salary = None,
+        location = None,
+        source = "xorazm_ish",
+        url = "https://t.me/Xorazm_ish/128",
+        postedAt = postedAt,
+        contactLinks = None,
+      )
+
+    val details = XorazmIshSourceJobEtl.enrich(rawJob)
+
+    expect.same(
+      Some("To'liq stavka ish\n09:00 - 14:00 (1-smena)\n14:00 - 22:30 (2-smena)"),
+      details.workSchedule,
+    )
+  }
+
+  pureTest("does not leak requirement lines into contact text") {
+    val rawJob =
+      RawJob(
+        title = "xostes",
+        company = Some("Fit Leader"),
+        description =
+          """#ish
+            |''Fit Leader'' fitness klubiga sotuv menejer - xostes ishga taklif qilinadi.
+            |
+            |Talablar:
+            |• Telefon qo'ng'iroqlariga javob bera olishi
+            |• Xushmuomala va mas'uliyatli bo'lishi kerak
+            |
+            |Tel: +998958684646
+            |
+            |👉 @Xorazm_ish""".stripMargin,
+        salary = None,
+        location = None,
+        source = "xorazm_ish",
+        url = "https://t.me/Xorazm_ish/129",
+        postedAt = postedAt,
+        contactLinks = None,
+      )
+
+    val details = XorazmIshSourceJobEtl.enrich(rawJob)
+
+    expect.same(None, details.contactText)
+  }
+
+  pureTest("keeps resume instruction text clean after removing telegram username") {
+    val rawJob =
+      RawJob(
+        title = "operator",
+        company = Some("Ostonadent 3D"),
+        description =
+          """#ish
+            |''Ostonadent 3D'' markaziga operatorlar ishga taklif qilinadi.
+            |
+            |Murojaat uchun:
+            |Rezyumengizni telegram orqali @ostona3bot ga 1 ta xabar ko'rinishida yuboring.
+            |
+            |👉 @Xorazm_ish""".stripMargin,
+        salary = None,
+        location = None,
+        source = "xorazm_ish",
+        url = "https://t.me/Xorazm_ish/130",
+        postedAt = postedAt,
+        contactLinks = None,
+      )
+
+    val details = XorazmIshSourceJobEtl.enrich(rawJob)
+
+    expect.same(
+      Some("Rezyumengizni telegram orqali 1 ta xabar ko'rinishida yuboring"),
+      details.contactText,
+    ) &&
+    expect.same(List("ostona3bot"), details.contactTelegramUsernames)
+  }
+
+  pureTest("normalizes title into sentence case without breaking acronyms") {
+    val details =
+      JobDetails(
+        requirements = None,
+        responsibilities = None,
+        benefits = None,
+        additional = None,
+        workSchedule = None,
+        contactText = None,
+        contactPhoneNumbers = List("+998901112233"),
+        contactTelegramUsernames = List.empty,
+        contactLinks = List.empty,
+      )
+
+    val lowerTitle =
+      dto.Job.fromEvent(
+        input =
+          RawJob(
+            title = "ishchilar",
+            company = Some("Test"),
+            description = "text",
+            salary = None,
+            location = None,
+            source = "xorazm_ish",
+            url = "https://t.me/Xorazm_ish/126",
+            postedAt = postedAt,
+            contactLinks = None,
+          ),
+        id = UUID.fromString("00000000-0000-0000-0000-000000000126"),
+        createdAt = postedAt,
+        details = details,
+      )
+
+    val acronymTitle =
+      dto.Job.fromEvent(
+        input =
+          RawJob(
+            title = "AQEM",
+            company = Some("Test"),
+            description = "text",
+            salary = None,
+            location = None,
+            source = "xorazm_ish",
+            url = "https://t.me/Xorazm_ish/127",
+            postedAt = postedAt,
+            contactLinks = None,
+          ),
+        id = UUID.fromString("00000000-0000-0000-0000-000000000127"),
+        createdAt = postedAt,
+        details = details,
+      )
+
+    expect.same("Ishchilar", lowerTitle.title) &&
+    expect.same("AQEM", acronymTitle.title)
+  }
+}

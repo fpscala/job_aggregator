@@ -5,4 +5,5 @@ sealed trait InsertResult
 object InsertResult {
   case object Inserted extends InsertResult
   case object Duplicate extends InsertResult
+  case object Invalid extends InsertResult
 }

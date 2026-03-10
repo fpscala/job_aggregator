@@ -20,3 +20,4 @@ class Job(BaseModel):
     source: NonEmptyStr
     url: NonEmptyStr
     posted_at: datetime
+    contact_links: list[NonEmptyStr] | None = None

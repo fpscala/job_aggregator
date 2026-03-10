@@ -49,8 +49,26 @@ NOISE_PREFIXES = (
     "xorazm ish",
     "kanalga obuna",
 )
+NON_JOB_TAGS = {
+    "#yangilik",
+    "#fikr",
+    "#mulohaza",
+    "#foydali",
+    "#tabrik",
+    "#reklama",
+    "#eslatma",
+    "#malumot",
+    "#ishchi_topildi",
+    "#ish_kerak",
+}
+NON_JOB_PHRASES = (
+    "ushbu reklama egasi ishchi topganini ma'lum qildi",
+    "o'zingizga zarur ishchini biz orqali toping",
+    "ishchi topganini ma'lum qildi",
+)
 ROLE_BULLET_CHARS = "-•▪*●◦"
 ROLE_BULLET_PATTERN = re.compile(r"^[\s\-•▪*●◦\u25aa\ufe0f]+")
+HASHTAG_PATTERN = re.compile(r"#[\w\u0400-\u04FF\u2019\u02BB\u02BC]+", re.IGNORECASE)
 JOB_SIGNAL_PATTERNS = [
     re.compile(r"ishga\s+taklif\s+qilin", re.IGNORECASE),
     re.compile(r"\b(?:vakansiya|bo'sh\s+ish\s+o'rni|lavozim|xodim\s+kerak|ishchi\s+kerak)\b", re.IGNORECASE),
@@ -117,6 +135,8 @@ class Parser(BaseParser):
         lines = self._split_lines(cleaned_text)
         if not lines:
             return None
+        if self._has_blocked_signal(lines, cleaned_text):
+            return None
 
         heading_index, heading = self._extract_heading(lines)
         role_lines = self._extract_role_lines(lines, heading_index)
@@ -140,6 +160,17 @@ class Parser(BaseParser):
     def _looks_like_job_post(self, text: str) -> bool:
         lowered = text.lower()
         return any(pattern.search(lowered) for pattern in JOB_SIGNAL_PATTERNS)
+
+    def _has_blocked_signal(self, lines: list[str], text: str) -> bool:
+        lowered_text = text.lower()
+        if any(phrase in lowered_text for phrase in NON_JOB_PHRASES):
+            return True
+
+        for line in lines[:3]:
+            tags = {tag.lower() for tag in HASHTAG_PATTERN.findall(line)}
+            if tags & NON_JOB_TAGS:
+                return True
+        return False
 
     def _cleanup_text(self, text: str) -> str:
         normalized = text.replace("\xa0", " ").replace("\u200b", " ")

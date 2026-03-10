@@ -37,6 +37,10 @@ object RawJobListener {
                   Logger[F].info(
                     s"Skipped duplicate job from source=${rawJobEvent.source} title=${rawJobEvent.title}"
                   )
+                case InsertResult.Invalid =>
+                  Logger[F].warn(
+                    s"Skipped invalid job from source=${rawJobEvent.source} title=${rawJobEvent.title}"
+                  )
               }
             } yield ())
               .handleErrorWith { error =>
