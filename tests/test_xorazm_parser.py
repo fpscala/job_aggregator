@@ -129,6 +129,37 @@ class XorazmParserTestCase(unittest.TestCase):
         self.assertEqual(job.location, "город Ургенч, улица Галаба, дом 11/1 (Электросеть г. Ургенч)")
         self.assertEqual(job.salary, "согласовывается на основе собеседования")
 
+    def test_preserves_full_heading_for_marketing_style_invitation(self) -> None:
+        message = FakeMessage(
+            """
+            #ish
+            "JASMIN Cake bakery" jamoasi kengayotganligi munosabati bilan qandolatchilar ishga taklif qilinadi.
+
+            Talablar:
+            • 20 yoshdan katta bolishi
+
+            Ish vaqti: 09:00 - 19:00
+            Oylik: (ishbay) 120.000 so'mdan boshlanadi
+
+            Manzil: Urganch shahri
+            Mo'ljal: Amina do'koni
+
+            Tel: +998914316633
+            """
+        )
+
+        job = self.parser.parse(message)
+
+        self.assertIsNotNone(job)
+        assert job is not None
+        self.assertEqual(
+            job.title,
+            "\"JASMIN Cake bakery\" jamoasi kengayotganligi munosabati bilan qandolatchilar ishga taklif qilinadi",
+        )
+        self.assertEqual(job.company, "JASMIN Cake bakery")
+        self.assertEqual(job.location, "Urganch shahri (Amina do'koni)")
+        self.assertEqual(job.salary, "(ishbay) 120.000 so'mdan boshlanadi")
+
     def test_skips_non_job_post(self) -> None:
         message = FakeMessage("Kanalimizga obuna bo'ling va do'stlaringizga ulashing")
         self.assertIsNone(self.parser.parse(message))

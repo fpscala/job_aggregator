@@ -120,6 +120,10 @@ HEADING_TITLE_PREFIXES = (
     "nodavlat ta'lim muassasasiga",
     "mchj",
 )
+FULL_HEADING_FALLBACK_PATTERN = re.compile(
+    r"\b(?:jamoa\w*|munosabati\s+(?:bilan|ila)|kengay\w*)\b",
+    re.IGNORECASE,
+)
 
 
 class Parser(BaseParser):
@@ -239,10 +243,19 @@ class Parser(BaseParser):
             compact_roles = [self._compact_title(role) for role in role_lines if role]
             return self._join_roles(compact_roles)
 
-        for pattern in (HEADING_ROLE_PATTERN, GENERIC_ROLE_PATTERN, NEEDS_ROLE_PATTERN):
+        heading_match = HEADING_ROLE_PATTERN.search(heading)
+        if heading_match:
+            return self._cleanup_title(heading_match.group("title"))
+
+        for pattern in (GENERIC_ROLE_PATTERN, NEEDS_ROLE_PATTERN):
             match = pattern.search(heading)
-            if match:
-                return self._cleanup_title(match.group("title"))
+            if not match:
+                continue
+
+            extracted_title = self._cleanup_title(match.group("title"))
+            if self._should_preserve_full_heading(extracted_title):
+                return self._cleanup_title(heading)
+            return extracted_title
 
         if RUSSIAN_HEADING_PATTERN.search(heading) and role_lines:
             compact_roles = [self._compact_title(role) for role in role_lines if role]
@@ -352,6 +365,9 @@ class Parser(BaseParser):
         normalized = re.sub(r"\b(?:mchj|xususiy\s+maktab(?:ning)?|o['’‘`]?quv\s+markaz(?:i|ining))\b", "", normalized, flags=re.IGNORECASE)
         normalized = re.sub(r"\s{2,}", " ", normalized).strip(" -:;,.")
         return normalized or None
+
+    def _should_preserve_full_heading(self, extracted_title: str) -> bool:
+        return FULL_HEADING_FALLBACK_PATTERN.search(extracted_title) is not None
 
     def _remove_invitation_suffix(self, heading: str) -> str:
         cleaned = re.sub(r"ishga\s+taklif\s+qilin(?:adi|adi!|adi\.|moqda|gan).*", "", heading, flags=re.IGNORECASE)
