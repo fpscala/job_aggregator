@@ -83,7 +83,7 @@ object TelegramCaptionRendererTest extends SimpleIOSuite with Checkers {
   pureTest("appends footer handle when configured") {
     val rendered = TelegramCaptionRenderer.render(job, Some("@top_is_bot"))
 
-    expect(rendered.endsWith("🤖 <b>@top_is_bot</b>"))
+    expect(rendered.endsWith("@top_is_bot"))
   }
 
   pureTest("keeps caption within telegram caption limit") {

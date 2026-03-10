@@ -163,8 +163,8 @@ object TelegramCaptionRenderer {
       .map { handle =>
         val normalized = if (handle.startsWith("@")) handle else s"@$handle"
         RenderBlock(
-          lines = List(s"🤖 <b>${escape(normalized)}</b>"),
-          plainLines = List(s"🤖 $normalized"),
+          lines = List(escape(normalized)),
+          plainLines = List(normalized),
           allowPartial = false,
         )
       }

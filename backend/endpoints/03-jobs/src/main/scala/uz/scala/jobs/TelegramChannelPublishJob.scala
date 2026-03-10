@@ -75,7 +75,11 @@ object TelegramChannelPublishJob
           channelChatId = channelChatId,
           batchSize = env.telegram.publish.batchSize.max(1),
           bannerImagePath = bannerImagePath,
-          footerHandle = env.telegram.publish.footerHandle.map(_.trim).filter(_.nonEmpty),
+          footerHandle =
+            env.telegram.publish.footerHandle
+              .map(_.trim)
+              .filter(_.nonEmpty)
+              .orElse(Option(channelChatId).filter(_.startsWith("@"))),
         )
       }
 
