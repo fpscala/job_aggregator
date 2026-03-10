@@ -8,7 +8,7 @@ import uz.scala.etl.SourceJobEtl
 
 object XorazmIshSourceJobEtl extends SourceJobEtl {
   override val sources: Set[String] =
-    Set("xorazm_ish")
+    Set("xorazm_ish", "xorazm_ish_bor_elonlar")
 
   private final case class ExtractedSection(
       lines: List[String],

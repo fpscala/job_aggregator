@@ -100,6 +100,52 @@ class XorazmParserTestCase(unittest.TestCase):
         self.assertEqual(job.location, "Shovot, Xonqa va Yangiariq")
         self.assertEqual(job.title, "Ingliz tili fanidan Asosiy va yordamchi o'qituvchilar")
 
+    def test_parses_followup_role_blocks_in_multi_role_post(self) -> None:
+        message = FakeMessage(
+            """
+            #ish
+            ''Texno bozor'' jamoasiga quyidagi lavozimlarga ishga taklif qilinadi.
+
+            ▪️ Brend Face
+            Talablar:
+            • Faqat ayol-qizlar
+            • 18-30 yosh
+            • O'zbek tilida ravon va chiroyli gapira olish
+            • Kamera oldida erkin chiqish qila olish
+
+            Qulayliklar:
+            ✓ Ahil va professional jamoa
+            ✓ Qulay ish muhiti
+
+            Ish vaqti va oylik suhbat asosida kelishiladi
+
+            ▪️Bosh buxgalter
+            Talablar:
+            • Buxgalteriya sohasida kamida 3-5 yil ish tajribasi
+            • Retail (chakana savdo) sohasida ishlagan bo'lishi shart
+            • 1C yoki boshqa buxgalteriya dasturlarida ishlay olish
+
+            Qulayliklar:
+            ✓ Barqaror ish o'rni
+            ✓ Professional rivojlanish imkoniyati
+
+            Ish vaqti: 6/1, 09:00 - 18:00
+            Oylik suhbat asosida kelishiladi
+
+            Manzil: Urganch shahri
+            Tel: +998905589009
+            """
+        )
+
+        job = self.parser.parse(message)
+
+        self.assertIsNotNone(job)
+        assert job is not None
+        self.assertEqual(job.title, "Brend Face / Bosh buxgalter")
+        self.assertEqual(job.company, "Texno bozor")
+        self.assertEqual(job.location, "Urganch shahri")
+        self.assertEqual(job.salary, "suhbat asosida kelishiladi")
+
     def test_parses_russian_post(self) -> None:
         message = FakeMessage(
             """

@@ -204,6 +204,8 @@ class Parser(BaseParser):
             marker in lowered_heading
             for marker in ("quyidagi lavozim", "lavozimlar", "должност", "на должность", "на следующие должности")
         )
+        if collect_roles:
+            return self._collect_explicit_role_lines(lines, heading_index + 1)
 
         roles: list[str] = []
         for line in lines[heading_index + 1 :]:
@@ -218,6 +220,24 @@ class Parser(BaseParser):
             collect_roles = True
             roles.append(self._strip_bullet(line))
         return roles if collect_roles else []
+
+    def _collect_explicit_role_lines(self, lines: list[str], start_index: int) -> list[str]:
+        roles: list[str] = []
+        for line in lines[start_index:]:
+            if self._is_section_line(line):
+                break
+            if not self._is_role_candidate(line):
+                if roles:
+                    break
+                continue
+            roles.append(self._strip_bullet(line))
+
+        for index in range(start_index, len(lines)):
+            if not self._is_followup_role_heading(lines, index):
+                continue
+            roles.append(self._strip_bullet(lines[index]))
+
+        return [role for role in dict.fromkeys(roles) if role]
 
     def _extract_company(self, lines: list[str], heading: str) -> str | None:
         inline_company = self._extract_inline_field(lines, "company")
@@ -323,6 +343,83 @@ class Parser(BaseParser):
             return False
         return line[0] in ROLE_BULLET_CHARS or any(keyword in lowered for keyword in ("menejer", "sotuvchi", "administrator", "tikuvchi", "oshpaz", "operator", "kassir", "yuk", "agent", "marketolog", "barista", "ofitsiant", "qorovul", "воспитатель", "учитель", "продав", "оператор"))
 
+    def _is_followup_role_heading(self, lines: list[str], index: int) -> bool:
+        line = lines[index]
+        stripped = self._strip_bullet(line)
+        lowered = stripped.lower()
+        if not stripped or self._is_section_line(stripped) or self._is_contact_line(stripped):
+            return False
+        if len(stripped) > 60:
+            return False
+        if any(
+            lowered.startswith(prefix)
+            for prefix in (
+                "faqat ",
+                "kamida ",
+                "tajriba ",
+                "mas'uliyat",
+                "masuliyat",
+                "ijtimoiy ",
+                "tashqi ",
+                "kreativ ",
+                "barqaror ",
+                "ahil ",
+                "professional ",
+                "qulay ",
+                "shaxsiy ",
+                "oylik ",
+                "maosh ",
+                "ish vaqti",
+                "manzil",
+                "mo'ljal",
+                "telefon",
+                "tel",
+                "aloqa",
+            )
+        ):
+            return False
+        if ":" in stripped and (
+            any(marker in lowered for marker in ("kunlik", "so'm", "so‘m", "mln", "maosh", "oylik", "zarabot", "зарплат"))
+            or any(char.isdigit() for char in stripped)
+        ):
+            return False
+        if line[0] not in ROLE_BULLET_CHARS and not any(
+            keyword in lowered
+            for keyword in (
+                "menejer",
+                "sotuvchi",
+                "administrator",
+                "tikuvchi",
+                "oshpaz",
+                "operator",
+                "kassir",
+                "yuk",
+                "agent",
+                "marketolog",
+                "barista",
+                "ofitsiant",
+                "qorovul",
+                "buxgalter",
+                "xodim",
+                "face",
+                "воспитатель",
+                "учитель",
+                "продав",
+                "оператор",
+                "бухгалтер",
+            )
+        ):
+            return False
+
+        previous_line = self._previous_significant_line(lines, index)
+        if previous_line and previous_line[0] in ROLE_BULLET_CHARS:
+            return False
+
+        next_line = self._next_significant_line(lines, index)
+        if not next_line:
+            return False
+        return self._is_section_line(next_line) or self._is_contact_line(next_line)
+
     def _is_contact_line(self, line: str) -> bool:
         lowered = line.lower()
         return lowered.startswith(("tel", "telefon", "aloqa", "murojaat", "rezyume", "тел", "контакт"))
@@ -330,6 +427,26 @@ class Parser(BaseParser):
     def _normalize_line(self, line: str) -> str:
         compact = re.sub(r"\s+", " ", line.strip())
         return compact.strip()
+
+    def _next_significant_line(self, lines: list[str], index: int) -> str | None:
+        next_index = index + 1
+        while next_index < len(lines):
+            candidate = lines[next_index]
+            if self._is_noise_line(candidate):
+                next_index += 1
+                continue
+            return candidate
+        return None
+
+    def _previous_significant_line(self, lines: list[str], index: int) -> str | None:
+        previous_index = index - 1
+        while previous_index >= 0:
+            candidate = lines[previous_index]
+            if self._is_noise_line(candidate):
+                previous_index -= 1
+                continue
+            return candidate
+        return None
 
     def _strip_bullet(self, line: str) -> str:
         return ROLE_BULLET_PATTERN.sub("", line).strip()
