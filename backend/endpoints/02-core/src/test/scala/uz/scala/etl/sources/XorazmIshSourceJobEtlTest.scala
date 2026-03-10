@@ -244,6 +244,65 @@ object XorazmIshSourceJobEtlTest extends SimpleIOSuite {
     expect.same(List("+998918682219", "+998918682210"), details.contactPhoneNumbers)
   }
 
+  pureTest("keeps salary continuation and contact cta out of additional") {
+    val rawJob =
+      RawJob(
+        title = "Gold Restoranga Tayyorlab biladigan povrlarga ish bor",
+        company = Some("Gold Restoran"),
+        description =
+          """YANGI ISH
+            |***YANGI***Gold Restoranga
+            |• POVR PROFESSIONAL 7-10
+            |• Turetski kuhnya
+            |• Tandirda Lavash avgan non
+            |• Gosht steak
+            |• Barista cofe maxito koktell
+            |• Salat opitni
+            |• Desert
+            |Tayyorlab biladigan povrlarga ish bor ✅
+            |
+            |Paspurt
+            |Med qnishka
+            |Yashash joyi Urganch shahar
+            |
+            |🧾YOSHI: 20 Dan 35 gacha
+            |📋MA'LUMOTI:
+            |👨‍🍳👩‍🍳JINSI: Ayol Erkak
+            |
+            |⏰ISH VAQTI: yangi ochiladi nomalum
+            |💰 OYLIK MAOSH:
+            |POVR 150-300 som
+            |Opitina qorob belgilanadi
+            |
+            |📍 MANZIL: GOLD Resto bar
+            |🎯MO'LJAL: oblasnoy Raddom
+            |
+            |📌 AGAR TALABLAR SIZGA MAQUL KELGAN BO'LSA BIZ BILAN BOG'LANING!
+            |
+            |📞 Bog'lanish 👇
+            |📞 Telefon raqam:
+            |+998995277775
+            |
+            |👉 @Xorazm_ish_bor_elonlar""".stripMargin,
+        salary = Some("150-300 som"),
+        location = Some("GOLD Resto bar (oblasnoy Raddom)"),
+        source = "xorazm_ish_bor_elonlar",
+        url = "https://t.me/Xorazm_ish_bor_elonlar/999997",
+        postedAt = postedAt,
+        contactLinks = None,
+      )
+
+    val details = XorazmIshSourceJobEtl.enrich(rawJob)
+    val additional = details.additional.getOrElse("")
+
+    expect(!additional.contains("POVR 150-300 som")) &&
+    expect(!additional.contains("Opitina qorob belgilanadi")) &&
+    expect(!additional.contains("AGAR TALABLAR")) &&
+    expect(!additional.contains("Telefon raqam")) &&
+    expect(!additional.contains("+998995277775")) &&
+    expect.same(List("+998995277775"), details.contactPhoneNumbers)
+  }
+
   pureTest("keeps only real schedule lines in work schedule") {
     val rawJob =
       RawJob(

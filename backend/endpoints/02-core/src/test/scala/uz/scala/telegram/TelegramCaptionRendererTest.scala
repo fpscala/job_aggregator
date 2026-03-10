@@ -98,4 +98,36 @@ object TelegramCaptionRendererTest extends SimpleIOSuite with Checkers {
 
     expect(rendered.length <= 1024)
   }
+
+  pureTest("drops duplicate contact and metadata lines from additional and keeps phone last") {
+    val rendered =
+      TelegramCaptionRenderer.render(
+        job.copy(
+          location = Some("Hamid Olimjon 226 (Ekskavator zavodi yonida)"),
+          additional =
+            Some(
+              "Eslatma\nUrganch yoki G'oybu mahallasida yashovchilar murojaat qilsin\nTalabalar qabul qilinmaydi\nUzoqdan keladiganlar bezovta qilmasin\nBog'lanish\nTelefon raqam\n998 88 299 12 18\n998 91 868 22 10\nMo'ljal: Ekskavator zavodi yonida\nAGAR TALABLAR SIZGA MAQUL KELGAN BO'LSA BIZ BILAN BOG'LANING!\nPOVR 150-300 som"
+            ),
+          contactPhoneNumbers = List("+998882991218", "+998918682210"),
+          contactText = None,
+          contactTelegramUsernames = Nil,
+          contactLinks = Nil,
+        )
+      )
+
+    val additionalIndex = rendered.indexOf("✨ <b>Qo'shimcha:</b>")
+    val phoneIndex = rendered.indexOf("☎️ <b>Telefon:</b>")
+
+    expect(rendered.contains("• Eslatma")) &&
+    expect(rendered.contains("• Urganch yoki G'oybu mahallasida yashovchilar murojaat qilsin")) &&
+    expect(!rendered.contains("• Bog'lanish")) &&
+    expect(!rendered.contains("• Telefon raqam")) &&
+    expect(!rendered.contains("• 998 88 299 12 18")) &&
+    expect(!rendered.contains("• 998 91 868 22 10")) &&
+    expect(!rendered.contains("• Mo'ljal: Ekskavator zavodi yonida")) &&
+    expect(!rendered.contains("• AGAR TALABLAR SIZGA MAQUL KELGAN BO'LSA BIZ BILAN BOG'LANING!")) &&
+    expect(!rendered.contains("• POVR 150-300 som")) &&
+    expect(additionalIndex >= 0) &&
+    expect(phoneIndex > additionalIndex)
+  }
 }

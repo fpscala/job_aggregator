@@ -18,6 +18,25 @@ object TelegramCaptionRenderer {
     "anketa",
     "bot",
   )
+  private val LowValueAdditionalPrefixes = Set(
+    "bog'lanish",
+    "bog'lanish uchun",
+    "boglanish",
+    "murojaat",
+    "murojaat uchun",
+    "aloqa",
+    "aloqa uchun",
+    "telefon",
+    "telefon raqam",
+    "telefon raqami",
+    "tel",
+    "mo'ljal",
+    "mo‘ljal",
+    "manzil",
+    "ish haqi",
+    "maosh",
+    "oylik",
+  )
   private val DecorativePrefixChars = Set(
     '•',
     '-',
@@ -55,15 +74,15 @@ object TelegramCaptionRenderer {
           renderSection("📋", "Talablar", job.requirements),
           renderSection("🛠", "Vazifalar", job.responsibilities),
           renderSection("🎁", "Qulayliklar", job.benefits),
+          renderAdditionalSection(job),
           renderContactSection(job),
-          renderList("☎️", "Telefon", job.contactPhoneNumbers),
           renderList(
             "💬",
             "Telegram",
             job.contactTelegramUsernames.map(username => s"@$username"),
           ),
           renderLinks(job.contactLinks),
-          renderSection("✨", "Qo'shimcha", job.additional),
+          renderList("☎️", "Telefon", job.contactPhoneNumbers),
         ).flatten,
       maxLength = MaxCaptionLength - footerBudget,
     )
@@ -123,6 +142,18 @@ object TelegramCaptionRenderer {
         value = job.contactText,
         usernames = job.contactTelegramUsernames,
         phoneNumbers = job.contactPhoneNumbers,
+        links = job.contactLinks,
+      ),
+    )
+
+  private def renderAdditionalSection(job: Job): Option[RenderBlock] =
+    renderBulletBlock(
+      "✨",
+      "Qo'shimcha",
+      sanitizeAdditionalLines(
+        value = job.additional,
+        phoneNumbers = job.contactPhoneNumbers,
+        usernames = job.contactTelegramUsernames,
         links = job.contactLinks,
       ),
     )
@@ -307,6 +338,51 @@ object TelegramCaptionRenderer {
         LowValueContactPhrases.contains(compact) ||
         stripped.isEmpty ||
         LowValueContactPhrases.contains(stripped)
+      }
+      .distinct
+  }
+
+  private def sanitizeAdditionalLines(
+      value: Option[String],
+      phoneNumbers: List[String],
+      usernames: List[String],
+      links: List[String],
+    ): List[String] = {
+    val normalizedUsernames =
+      usernames.map(_.trim.toLowerCase.stripPrefix("@")).filter(_.nonEmpty).toSet
+    val normalizedPhones =
+      phoneNumbers.map(phoneDigits).filter(_.nonEmpty).toSet
+    val normalizedLinks =
+      links.map(_.trim.toLowerCase).filter(_.nonEmpty).toSet
+
+    value
+      .map(normalizeMultiline)
+      .toList
+      .flatMap(_.linesIterator.toList)
+      .map(normalizeDecorated)
+      .filter(_.nonEmpty)
+      .filterNot { line =>
+        val compact = line.toLowerCase.replaceAll("""\s+""", " ").trim
+        val compactNoColon = compact.stripSuffix(":")
+        val digits = phoneDigits(line)
+
+        normalizedPhones.contains(digits) ||
+        normalizedLinks.contains(compact) ||
+        normalizedUsernames.contains(compact.stripPrefix("@")) ||
+        LowValueContactPhrases.contains(compact) ||
+        LowValueContactPhrases.contains(compactNoColon) ||
+        compact.contains("biz bilan bog'lan") ||
+        compact.contains("murojaat qiling") ||
+        (compact.exists(_.isDigit) &&
+          (compact.contains("som") ||
+            compact.contains("so'm") ||
+            compact.contains("so‘m") ||
+            compact.contains("mln") ||
+            compact.contains("million") ||
+            compact.contains("ming"))) ||
+        LowValueAdditionalPrefixes.exists(prefix =>
+          compact == prefix || compactNoColon == prefix || compact.startsWith(s"$prefix:")
+        )
       }
       .distinct
   }

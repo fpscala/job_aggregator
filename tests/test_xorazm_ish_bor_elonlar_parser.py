@@ -477,6 +477,41 @@ class XorazmIshBorElonlarParserTestCase(unittest.TestCase):
         self.assertEqual(job.title, "Savdo bo'limi operatori / Xo'jalik bo'limi xodimi")
         self.assertEqual(job.contact_links, ["https://forms.gle/example"])
 
+    def test_prefers_summary_title_for_marketing_skill_list_post(self) -> None:
+        message = FakeMessage(
+            """
+            YANGI ISH
+            ***YANGI***Gold Restoranga
+            • POVR PROFESSIONAL 7-10
+            • Turetski kuhnya
+            • Tandirda Lavash avgan non
+            • Gosht steak
+            • Barista cofe maxito koktell
+            • Salat opitni
+            • Desert
+            Tayyorlab biladigan povrlarga ish bor ✅
+
+            Paspurt
+            Med qnishka
+            Yashash joyi Urganch shahar
+
+            💰 OYLIK MAOSH:
+            POVR ***150-300 som***
+
+            📍 MANZIL: GOLD Resto bar
+            🎯 MO'LJAL: oblasnoy Raddom
+            """
+        )
+
+        job = self.parser.parse(message)
+
+        self.assertIsNotNone(job)
+        assert job is not None
+        self.assertEqual(job.title, "Gold Restoranga Tayyorlab biladigan povrlarga ish bor")
+        self.assertEqual(job.company, "Gold Restoran")
+        self.assertEqual(job.location, "GOLD Resto bar (oblasnoy Raddom)")
+        self.assertEqual(job.salary, "150-300 som")
+
 
 if __name__ == "__main__":
     unittest.main()

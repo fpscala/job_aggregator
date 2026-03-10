@@ -89,6 +89,16 @@ object XorazmIshSourceJobEtl extends SourceJobEtl {
       "ориентир",
     )
 
+  private val SalaryMetadataMarkers =
+    List(
+      "oylik",
+      "maosh",
+      "ish haqi",
+      "kunlik",
+      "зарплата",
+      "заработная плата",
+    )
+
   private val SectionMarkers =
     RequirementsMarkers ++
       ResponsibilitiesMarkers ++
@@ -325,12 +335,16 @@ object XorazmIshSourceJobEtl extends SourceJobEtl {
   }
 
   private def metadataIndices(lines: Vector[String]): Set[Int] =
-    lines.zipWithIndex.collect {
-      case (line, index)
-          if isMetadataLine(line) ||
-            (index > 0 && isMetadataLine(lines(index - 1)) && looksLikeMetadataContinuation(line)) =>
-        index
-    }.toSet
+    lines.zipWithIndex.foldLeft((Set.empty[Int], false)) {
+      case ((indices, _), (line, index)) if isMetadataLine(line) =>
+        (indices + index, isSalaryMetadataLine(line))
+      case ((indices, true), (line, index)) if looksLikeSalaryContinuation(line) =>
+        (indices + index, true)
+      case ((indices, _), (line, index)) if looksLikeMetadataContinuation(line) && index > 0 && isMetadataLine(lines(index - 1)) =>
+        (indices + index, false)
+      case ((indices, _), _) =>
+        (indices, false)
+    }._1
 
   private def extractLinks(
       rawJob: RawJob,
@@ -359,6 +373,9 @@ object XorazmIshSourceJobEtl extends SourceJobEtl {
 
   private def isMetadataLine(line: String): Boolean =
     startsWithAny(line, MetadataMarkers)
+
+  private def isSalaryMetadataLine(line: String): Boolean =
+    startsWithAny(line, SalaryMetadataMarkers)
 
   private def isStandaloneContactInstruction(line: String): Boolean = {
     val key = normalized(line)
@@ -442,7 +459,7 @@ object XorazmIshSourceJobEtl extends SourceJobEtl {
         current.replace(url, " ")
       }
 
-    normalizeWhitespace(
+    val cleaned =
       stripBenefitBullet(
         stripDecorations(
           stripBullet(
@@ -450,7 +467,11 @@ object XorazmIshSourceJobEtl extends SourceJobEtl {
           )
         )
       )
-    )
+
+    val normalized = normalizeWhitespace(cleaned)
+    val key = normalized.toLowerCase
+    if (key.contains("biz bilan bog'lan") || key.contains("murojaat qiling")) ""
+    else normalized
   }
 
   private def cleanContentLine(line: String): String =
@@ -479,6 +500,28 @@ object XorazmIshSourceJobEtl extends SourceJobEtl {
   private def looksLikeMetadataContinuation(line: String): Boolean = {
     val trimmed = line.trim
     trimmed.startsWith("(") || trimmed.startsWith("（")
+  }
+
+  private def looksLikeSalaryContinuation(line: String): Boolean = {
+    val key = normalized(line)
+    if (key.isEmpty || isSectionBoundary(line) || containsPhoneNumber(line)) false
+    else {
+      key.exists(_.isDigit) ||
+      key.contains("som") ||
+      key.contains("so'm") ||
+      key.contains("so‘m") ||
+      key.contains("mln") ||
+      key.contains("million") ||
+      key.contains("ming") ||
+      key.contains("suhbat") ||
+      key.contains("kelish") ||
+      key.contains("bonus") ||
+      key.contains("foiz") ||
+      key.contains("kpi") ||
+      key.contains("opit") ||
+      key.contains("qarab") ||
+      key.contains("belgilanadi")
+    }
   }
 
   private def looksLikeWorkSchedule(line: String): Boolean = {
