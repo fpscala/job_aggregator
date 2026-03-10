@@ -185,6 +185,10 @@ PROMO_COMPANY_PATTERN = re.compile(
     r"^(?P<company>.+?)\s+(?:sizga\s+)?bo['’`]sh\s+ish\s+o['’`]rinlarini\s+taklif\s+etadi\b",
     re.IGNORECASE,
 )
+LEADING_COMPANY_CONTEXT_PATTERN = re.compile(
+    r"^(?:yangi\s+)?(?P<company>.+?\b(?:restoran|restorant|kafe|cafe|bar|resto\s*bar|club|pub|do['’`]?kon|market|gipermarket|klinika|markaz|bog['’`]cha|maktab|korxona))(?:ga|ka|qa|iga|siga|га|ка|қа|ига|сига)?$",
+    re.IGNORECASE,
+)
 INLINE_ADDRESS_PATTERNS = [
     re.compile(r"^(?:[\W_]+\s*)?(?:manzil|офис\s+манзили|адрес)\s*[:\-]?\s*(?P<value>.*)$", re.IGNORECASE),
     re.compile(r"^(?:[\W_]+\s*)?ish\s+joyi\s*[:\-]\s*(?P<value>.*)$", re.IGNORECASE),
@@ -235,7 +239,11 @@ LOCATION_HINT_PATTERN = re.compile(
     re.IGNORECASE,
 )
 ROLE_HINT_PATTERN = re.compile(
-    r"\b(?:menejer|menedjer|operator|kassir|ofitsiant|oshpaz|barista|xodim|ishchi|ishchilar|agent|savdo|sotuvchi|supervayzer|buxgalter|dizayner|xostes|yordamchi|marketolog|marketing|tarbiyachi|o['’`]qituvchi|psixolog|shartnoma|xo['’`]jalik|bo['’`]lim(?:i|iga)?|mijozlar\s+bilan\s+ishlash|omborchi|ombor\s+mudiri|sklad|moykachi|uborkachi|kliner|tozalovchi|xamirchi|haydovchi|dastavshik|dostavshik|tur\s+agent|kompyuterchi|mebelchi|enaga|reklama\s+tarqatish\s+mutaxassisi|servis\s+menedjeri|call\s+sentra\s+operator|yuk\s+tashuvchi|support\s+teachers?|teacher|logist|dispatch|dispatcher|hr-?specialist|assistant|супервайзер|бухгалтер|хисобчи|ҳисобчи|оператор|кассир|повар|бариста|официант|кондитер|мойщица|доставшик|логист|диспетчир|ассистент|hr-специалист|савдо\s+вакили|менежер|ходими|учител)\b",
+    r"\b(?:menejer|menedjer|operator|kassir|ofitsiant|oshpaz|barista|povar\w*|povr\w*|xodim|ishchi|ishchilar|agent|savdo|sotuvchi|supervayzer|buxgalter|dizayner|xostes|yordamchi|marketolog|marketing|tarbiyachi|o['’`]qituvchi|psixolog|shartnoma|xo['’`]jalik|bo['’`]lim(?:i|iga)?|mijozlar\s+bilan\s+ishlash|omborchi|ombor\s+mudiri|sklad|moykachi|uborkachi|kliner|tozalovchi|xamirchi|haydovchi|dastavshik|dostavshik|tur\s+agent|kompyuterchi|mebelchi|enaga|reklama\s+tarqatish\s+mutaxassisi|servis\s+menedjeri|call\s+sentra\s+operator|yuk\s+tashuvchi|support\s+teachers?|teacher|logist|dispatch|dispatcher|hr-?specialist|assistant|супервайзер|бухгалтер|хисобчи|ҳисобчи|оператор|кассир|повар|бариста|официант|кондитер|мойщица|доставшик|логист|диспетчир|ассистент|hr-специалист|савдо\s+вакили|менежер|ходими|учител)\b",
+    re.IGNORECASE,
+)
+SUMMARY_TITLE_SIGNAL_PATTERN = re.compile(
+    r"\b(?:ish\s+bor|ishga\s+taklif|ishga\s+qabul|kerak|qidirmoqda|izlayapmiz|талаб\s+этилади|иш\s+бор)\b",
     re.IGNORECASE,
 )
 CONTACT_PREFIXES = (
@@ -393,6 +401,10 @@ class Parser(BaseParser):
                 if cleaned_company and not self._is_unreliable_company_candidate(cleaned_company):
                     return cleaned_company
 
+            context_company = self._extract_heading_company(candidate)
+            if context_company:
+                return context_company
+
         return None
 
     def _extract_title(self, lines: list[str], heading_index: int, heading: str, role_lines: list[str]) -> str | None:
@@ -400,8 +412,14 @@ class Parser(BaseParser):
         if explicit_title:
             return explicit_title
 
+        summary_title = self._extract_summary_title(lines, heading_index)
         if role_lines:
+            if len(role_lines) == 1 and summary_title:
+                return summary_title
             return self._join_roles(role_lines)
+
+        if summary_title:
+            return summary_title
 
         next_line = lines[heading_index + 1] if 0 <= heading_index + 1 < len(lines) else ""
         if heading and next_line and INVITATION_ONLY_PATTERN.search(next_line):
@@ -471,6 +489,69 @@ class Parser(BaseParser):
 
     def _extract_salary(self, lines: list[str]) -> str | None:
         return self._extract_labeled_field(lines, INLINE_SALARY_PATTERNS, allow_multiline=True)
+
+    def _extract_summary_title(self, lines: list[str], heading_index: int) -> str | None:
+        if heading_index < 0:
+            return None
+
+        boundary_index = len(lines)
+        for index in range(heading_index + 1, len(lines)):
+            candidate = lines[index]
+            if self._starts_labeled_field(candidate) or self._is_section_line(candidate) or self._is_contact_line(candidate):
+                boundary_index = index
+                break
+
+        summary_index: int | None = None
+        for index in range(heading_index + 1, boundary_index):
+            candidate = lines[index]
+            cleaned = self._cleanup_heading(candidate)
+            if not cleaned or self._is_noise_line(candidate):
+                continue
+            if SUMMARY_TITLE_SIGNAL_PATTERN.search(cleaned) and ROLE_HINT_PATTERN.search(cleaned):
+                summary_index = index
+                break
+
+        if summary_index is None:
+            return None
+
+        bullet_count = 0
+        for index in range(heading_index + 1, summary_index):
+            line = lines[index]
+            if line and (line[0] in ROLE_LIST_BULLET_CHARS or re.match(r"^\s*\d+[.)]", line)):
+                bullet_count += 1
+
+        if bullet_count < 3:
+            return None
+
+        summary = self._cleanup_heading(lines[summary_index])
+        context = self._extract_summary_context(lines, heading_index, summary_index)
+        if context:
+            return self._cleanup_heading(f"{context} {summary}")
+        return summary
+
+    def _extract_summary_context(self, lines: list[str], heading_index: int, summary_index: int) -> str | None:
+        for index in range(heading_index, summary_index):
+            candidate = lines[index]
+            if self._is_noise_line(candidate) or self._starts_labeled_field(candidate) or self._is_section_line(candidate):
+                continue
+            cleaned = self._cleanup_heading(candidate)
+            if not cleaned or cleaned.lower() in {"yangi ish", "ish bor"}:
+                continue
+            if cleaned.startswith(("•", "-", "▪", "▫")):
+                continue
+            if self._extract_heading_company(cleaned):
+                return self._cleanup_heading(re.sub(r"(?i)^yangi\s+", "", cleaned))
+        return None
+
+    def _extract_heading_company(self, value: str) -> str | None:
+        cleaned = self._cleanup_heading(value)
+        if not cleaned:
+            return None
+        cleaned = re.sub(r"(?i)^yangi\s+", "", cleaned).strip()
+        match = LEADING_COMPANY_CONTEXT_PATTERN.search(cleaned)
+        if not match:
+            return None
+        return self._cleanup_company(match.group("company"))
 
     def _extract_explicit_title(self, lines: list[str]) -> str | None:
         for index, line in enumerate(lines):
@@ -553,6 +634,8 @@ class Parser(BaseParser):
                     continue
 
                 joined = "; ".join(dict.fromkeys(values))
+                if pattern in INLINE_SALARY_PATTERNS:
+                    joined = self._cleanup_salary_value(joined)
                 return joined.strip(" -:;,.")
         return None
 
@@ -787,6 +870,7 @@ class Parser(BaseParser):
     def _cleanup_title(self, value: str) -> str:
         cleaned = self._strip_leading_symbols(value)
         cleaned = self._strip_bullet(cleaned)
+        cleaned = re.sub(r"\*{2,}", " ", cleaned)
         cleaned = re.sub(r"^(?:bo['’`]?sh\s+ish\s+o['’`]?rinlari\s*[⬇️:]*)", "", cleaned, flags=re.IGNORECASE)
         cleaned = re.sub(r"^(?:ish\s+lavozimlari?\s*[:\-]?)", "", cleaned, flags=re.IGNORECASE)
         cleaned = re.sub(r"^(?:vakansiya\s*[:\-]?)", "", cleaned, flags=re.IGNORECASE)
@@ -809,6 +893,7 @@ class Parser(BaseParser):
     def _cleanup_heading(self, value: str) -> str:
         cleaned = self._strip_leading_symbols(value)
         cleaned = self._strip_bullet(cleaned)
+        cleaned = re.sub(r"\*{2,}", " ", cleaned)
         cleaned = re.sub(r"\s*[^\w\u0400-\u04FF()]+$", "", cleaned)
         cleaned = re.sub(r"\s{2,}", " ", cleaned)
         return cleaned.strip(" -:;,.!")
@@ -826,7 +911,16 @@ class Parser(BaseParser):
 
     def _cleanup_field_value(self, value: str) -> str:
         cleaned = self._strip_leading_symbols(value)
+        cleaned = re.sub(r"\*{2,}", " ", cleaned)
         cleaned = re.sub(r"\s{2,}", " ", cleaned)
+        return cleaned.strip(" -:;,.")
+
+    def _cleanup_salary_value(self, value: str) -> str:
+        cleaned = value.replace("*", "")
+        cleaned = re.sub(r"\s{2,}", " ", cleaned).strip(" -:;,.")
+        lowered = cleaned.lower()
+        if any(marker in lowered for marker in ("so'm", "so‘m", "som", "mln", "ming", "million")):
+            cleaned = re.sub(r"^(?:povr|povar|oshpaz|barista)\s+", "", cleaned, flags=re.IGNORECASE)
         return cleaned.strip(" -:;,.")
 
     def _looks_like_salary_continuation(self, value: str) -> bool:
