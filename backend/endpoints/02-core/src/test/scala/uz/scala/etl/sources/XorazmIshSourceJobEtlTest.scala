@@ -120,6 +120,130 @@ object XorazmIshSourceJobEtlTest extends SimpleIOSuite {
     )
   }
 
+  pureTest("stops requirements before transport and contact sections") {
+    val rawJob =
+      RawJob(
+        title = "Tikuvchi",
+        company = Some("Voentorg"),
+        description =
+          """ISH BOR
+            |💼 Ish lavozimi: Tikuvchi
+            |
+            |🏢 Ish beruvchi: Voentorg
+            |
+            |📍 Manzil: Urganch shahri, Temir yo'l kasalxonasi yonidagi 4 qavatli uy
+            |
+            |⏰ Ish vaqti:
+            |Haftada 6 kun
+            |08:30 - 18:00
+            |
+            |💰 Ish haqi: 2 000 000 - 6 000 000 so'm
+            |(Ish sifati va hajmiga qarab belgilanadi)
+            |
+            |📝 Talablar:
+            |• Tikuvchilik bo'yicha ish tajribasi bo'lishi shart
+            |• Faqat ayollar
+            |• Chokni tekis va sifatli tikish ko'nikmasi
+            |• Urganch shahri aholisi bo'lishi afzal
+            |
+            |🚌 Transport yo'nalishlari:
+            |• 5-avtobus
+            |• 4-avtobus
+            |• 9-avtobus
+            |• 19-damas
+            |
+            |📞 Bog'lanish:
+            |📱 +998 94 524 12 85
+            |📱 +998 91 430 43 34
+            |
+            |👉 @Xorazm_ish_bor_elonlar""".stripMargin,
+        salary = Some("2 000 000 - 6 000 000 so'm"),
+        location = Some("Urganch shahri, Temir yo'l kasalxonasi yonidagi 4 qavatli uy"),
+        source = "xorazm_ish_bor_elonlar",
+        url = "https://t.me/Xorazm_ish_bor_elonlar/999999",
+        postedAt = postedAt,
+        contactLinks = None,
+      )
+
+    val details = XorazmIshSourceJobEtl.enrich(rawJob)
+
+    expect.same(
+      Some(
+        "Tikuvchilik bo'yicha ish tajribasi bo'lishi shart\nFaqat ayollar\nChokni tekis va sifatli tikish ko'nikmasi\nUrganch shahri aholisi bo'lishi afzal"
+      ),
+      details.requirements,
+    ) &&
+    expect.same(
+      Some("Transport yo'nalishlari\n5-avtobus\n4-avtobus\n9-avtobus\n19-damas"),
+      details.additional,
+    ) &&
+    expect.same(None, details.contactText) &&
+    expect.same(List("+998945241285", "+998914304334"), details.contactPhoneNumbers)
+  }
+
+  pureTest("moves eslatma block out of requirements") {
+    val rawJob =
+      RawJob(
+        title = "Sotuvchi-konsultant",
+        company = Some("SANTEXPARK Gipermarket (Qurilish va santexnika mahsulotlari)"),
+        description =
+          """📣📣📣📣
+            |💼 Ish lavozimi: Sotuvchi-konsultant
+            |
+            |🏢 Ish beruvchi: SANTEXPARK Gipermarket (Qurilish va santexnika mahsulotlari)
+            |
+            |📍 Manzil: Hamid Olimjon 226
+            |🎯 Mo'ljal: Ekskavator zavodi yonida
+            |
+            |⏰ Ish vaqti:
+            |08:30 – 18:00
+            |
+            |💰 Ish haqi: Suhbat asosida kelishiladi
+            |
+            |📝 Talablar:
+            |• Qizlar
+            |• Yosh: 20–30
+            |• Xushmuomala va chaqqon bo'lishi
+            |• Ishga mas'uliyat bilan yondashish
+            |• Ichki tartib-qoidalarga rioya qilish
+            |• Avval shu sohada ishlagan bo'lsa ustunlik beriladi
+            |
+            |📌 Eslatma:
+            |• Urganch yoki G'oybu mahallasida yashovchilar murojaat qilsin
+            |• Talabalar qabul qilinmaydi
+            |• Uzoqdan keladiganlar bezovta qilmasin
+            |
+            |📞 Bog'lanish:
+            |📱 +998 91 868 22 19
+            |📱 +998 91 868 22 10
+            |
+            |👉 @Xorazm_ish_bor_elonlar""".stripMargin,
+        salary = Some("Suhbat asosida kelishiladi"),
+        location = Some("Hamid Olimjon 226 (Ekskavator zavodi yonida)"),
+        source = "xorazm_ish_bor_elonlar",
+        url = "https://t.me/Xorazm_ish_bor_elonlar/999998",
+        postedAt = postedAt,
+        contactLinks = None,
+      )
+
+    val details = XorazmIshSourceJobEtl.enrich(rawJob)
+
+    expect.same(
+      Some(
+        "Qizlar\nYosh: 20–30\nXushmuomala va chaqqon bo'lishi\nIshga mas'uliyat bilan yondashish\nIchki tartib-qoidalarga rioya qilish\nAvval shu sohada ishlagan bo'lsa ustunlik beriladi"
+      ),
+      details.requirements,
+    ) &&
+    expect.same(
+      Some(
+        "Eslatma\nUrganch yoki G'oybu mahallasida yashovchilar murojaat qilsin\nTalabalar qabul qilinmaydi\nUzoqdan keladiganlar bezovta qilmasin"
+      ),
+      details.additional,
+    ) &&
+    expect.same(None, details.contactText) &&
+    expect.same(List("+998918682219", "+998918682210"), details.contactPhoneNumbers)
+  }
+
   pureTest("keeps only real schedule lines in work schedule") {
     val rawJob =
       RawJob(

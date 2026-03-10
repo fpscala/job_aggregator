@@ -33,9 +33,26 @@ object XorazmIshSourceJobEtl extends SourceJobEtl {
       "murojaat",
       "aloqa uchun",
       "aloqa",
+      "bog'lanish",
+      "boglanish",
       "ariza topshirish",
       "kontak",
       "контакты",
+    )
+
+  private val AdditionalSectionMarkers =
+    List(
+      "eslatma",
+      "qo'shimcha",
+      "qo'shimcha ma'lumot",
+      "qo'shimcha ma'lumotlar",
+      "qo‘shimcha",
+      "qo‘shimcha ma’lumot",
+      "qo‘shimcha ma’lumotlar",
+      "izoh",
+      "transport yo'nalishlari",
+      "transport yonalishlari",
+      "transport yunalishlari",
     )
 
   private val ContactInstructionMarkers =
@@ -59,6 +76,7 @@ object XorazmIshSourceJobEtl extends SourceJobEtl {
     List(
       "oylik",
       "maosh",
+      "ish haqi",
       "kunlik",
       "manzil",
       "mo'ljal",
@@ -75,6 +93,7 @@ object XorazmIshSourceJobEtl extends SourceJobEtl {
     RequirementsMarkers ++
       ResponsibilitiesMarkers ++
       BenefitsMarkers ++
+      AdditionalSectionMarkers ++
       WorkScheduleMarkers ++
       ContactSectionMarkers ++
       MetadataMarkers
@@ -132,6 +151,12 @@ object XorazmIshSourceJobEtl extends SourceJobEtl {
         start = startsWithAny(_, BenefitsMarkers),
         stripLabels = BenefitsMarkers,
       )
+    val labeledAdditional =
+      extractSection(
+        lines = lines,
+        start = startsWithAny(_, AdditionalSectionMarkers),
+        stripLabels = Nil,
+      )
     val workSchedule =
       extractWorkSchedule(lines)
 
@@ -155,6 +180,7 @@ object XorazmIshSourceJobEtl extends SourceJobEtl {
       requirements.consumedIndices ++
         responsibilities.consumedIndices ++
         benefits.consumedIndices ++
+        labeledAdditional.consumedIndices ++
         workSchedule.consumedIndices ++
         contact.consumedIndices ++
         metadataIndices(lines)
@@ -163,7 +189,11 @@ object XorazmIshSourceJobEtl extends SourceJobEtl {
       requirements = compact(requirements.lines),
       responsibilities = compact(responsibilities.lines),
       benefits = compact(benefits.lines),
-      additional = compact(extractAdditional(lines, consumedIndices, ignoredUsernames, ignoredUrls)),
+      additional =
+        compact(
+          (labeledAdditional.lines ++
+            extractAdditional(lines, consumedIndices, ignoredUsernames, ignoredUrls)).distinct
+        ),
       workSchedule = compact(workSchedule.lines),
       contactText = compact(contact.lines),
       contactPhoneNumbers = extractedPhoneNumbers,
@@ -296,7 +326,10 @@ object XorazmIshSourceJobEtl extends SourceJobEtl {
 
   private def metadataIndices(lines: Vector[String]): Set[Int] =
     lines.zipWithIndex.collect {
-      case (line, index) if isMetadataLine(line) => index
+      case (line, index)
+          if isMetadataLine(line) ||
+            (index > 0 && isMetadataLine(lines(index - 1)) && looksLikeMetadataContinuation(line)) =>
+        index
     }.toSet
 
   private def extractLinks(
@@ -425,10 +458,12 @@ object XorazmIshSourceJobEtl extends SourceJobEtl {
 
   private def stripLabelsFromLine(line: String, labels: List[String]): String =
     labels.foldLeft(line) { case (current, label) =>
-      current.replaceFirst(
-        s"(?iu)^\\s*[\\p{Punct}\\p{So}•▪◦●✔✅❗👤👉➤▶✓-]*\\Q$label\\E\\s*[:\\-–]?\\s*",
-        "",
-      )
+      LeadingDecorationPattern
+        .replaceFirstIn(current, "")
+        .replaceFirst(
+          s"(?iu)^\\Q$label\\E\\s*[:\\-–]?\\s*",
+          "",
+        )
     }
 
   private def stripBenefitBullet(line: String): String =
@@ -441,11 +476,17 @@ object XorazmIshSourceJobEtl extends SourceJobEtl {
       .replaceAll("""\(\s+""", "(")
       .replaceAll("""\s+\)""", ")")
 
+  private def looksLikeMetadataContinuation(line: String): Boolean = {
+    val trimmed = line.trim
+    trimmed.startsWith("(") || trimmed.startsWith("（")
+  }
+
   private def looksLikeWorkSchedule(line: String): Boolean = {
     val key = normalized(line)
 
     TimeValuePattern.findFirstIn(line).nonEmpty ||
     ScheduleRatioPattern.findFirstIn(key).nonEmpty ||
+    key.contains("haftada") ||
     key.contains("smena") ||
     key.contains("смена") ||
     key.contains("yakshanba") ||
