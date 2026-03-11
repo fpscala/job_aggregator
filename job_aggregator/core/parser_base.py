@@ -119,6 +119,10 @@ class BaseParser(ABC):
     def parse(self, message: "Message") -> Job | None:
         raise NotImplementedError
 
+    def parse_many(self, message: "Message") -> list[Job]:
+        job = self.parse(message)
+        return [job] if job is not None else []
+
     def get_message_text(self, message: "Message") -> str:
         return extract_message_text(message)
 

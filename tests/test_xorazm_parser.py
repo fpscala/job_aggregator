@@ -146,6 +146,59 @@ class XorazmParserTestCase(unittest.TestCase):
         self.assertEqual(job.location, "Urganch shahri")
         self.assertEqual(job.salary, "suhbat asosida kelishiladi")
 
+    def test_splits_followup_role_blocks_into_multiple_jobs(self) -> None:
+        message = FakeMessage(
+            """
+            #ish
+            ''Texno bozor'' jamoasiga quyidagi lavozimlarga ishga taklif qilinadi.
+
+            ▪️ Brend Face
+            Talablar:
+            • Faqat ayol-qizlar
+            • 18-30 yosh
+            • O'zbek tilida ravon va chiroyli gapira olish
+            • Kamera oldida erkin chiqish qila olish
+
+            Qulayliklar:
+            ✓ Ahil va professional jamoa
+            ✓ Qulay ish muhiti
+
+            Ish vaqti va oylik suhbat asosida kelishiladi
+
+            ▪️Bosh buxgalter
+            Talablar:
+            • Buxgalteriya sohasida kamida 3-5 yil ish tajribasi
+            • Retail (chakana savdo) sohasida ishlagan bo'lishi shart
+            • 1C yoki boshqa buxgalteriya dasturlarida ishlay olish
+
+            Qulayliklar:
+            ✓ Barqaror ish o'rni
+            ✓ Professional rivojlanish imkoniyati
+
+            Ish vaqti: 6/1, 09:00 - 18:00
+            Oylik suhbat asosida kelishiladi
+
+            Manzil: Urganch shahri
+            Tel: +998905589009
+            """
+        )
+
+        jobs = self.parser.parse_many(message)
+
+        self.assertEqual(len(jobs), 2)
+        self.assertEqual(jobs[0].title, "Brend Face")
+        self.assertEqual(jobs[0].company, "Texno bozor")
+        self.assertEqual(jobs[0].location, "Urganch shahri")
+        self.assertIn("Brend Face", jobs[0].description)
+        self.assertNotIn("Bosh buxgalter", jobs[0].description)
+        self.assertTrue(jobs[0].url.endswith("#role-1"))
+
+        self.assertEqual(jobs[1].title, "Bosh buxgalter")
+        self.assertEqual(jobs[1].company, "Texno bozor")
+        self.assertEqual(jobs[1].location, "Urganch shahri")
+        self.assertIn("Bosh buxgalter", jobs[1].description)
+        self.assertTrue(jobs[1].url.endswith("#role-2"))
+
     def test_parses_russian_post(self) -> None:
         message = FakeMessage(
             """

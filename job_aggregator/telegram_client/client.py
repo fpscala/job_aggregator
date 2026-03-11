@@ -113,7 +113,7 @@ class TelegramJobClient:
                 return
 
             try:
-                job = registration.parser.parse(message)
+                jobs = registration.parser.parse_many(message)
             except Exception:
                 logger.exception(
                     "Parser '%s' failed for channel '%s' message_id=%s",
@@ -123,7 +123,7 @@ class TelegramJobClient:
                 )
                 return
 
-            if job is None:
+            if not jobs:
                 logger.debug(
                     "Parser '%s' skipped message_id=%s from channel '%s'",
                     registration.plugin_name,
@@ -132,13 +132,14 @@ class TelegramJobClient:
                 )
                 return
 
-            logger.info(
-                "Parsed job title='%s' source='%s' message_id=%s",
-                job.title,
-                job.source,
-                getattr(message, "id", None),
-            )
-            await self._producer.publish(job)
+            for job in jobs:
+                logger.info(
+                    "Parsed job title='%s' source='%s' message_id=%s",
+                    job.title,
+                    job.source,
+                    getattr(message, "id", None),
+                )
+                await self._producer.publish(job)
 
     def _find_registration(self, event: events.NewMessage.Event) -> ParserRegistration | None:
         candidates = [event.chat_id]

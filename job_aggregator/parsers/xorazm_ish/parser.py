@@ -68,6 +68,7 @@ NON_JOB_PHRASES = (
 )
 ROLE_BULLET_CHARS = "-•▪*●◦"
 ROLE_BULLET_PATTERN = re.compile(r"^[\s\-•▪*●◦\u25aa\ufe0f]+")
+PHONE_PATTERN = re.compile(r"\+?\d(?:[\d\s()\-]{6,}\d)")
 HASHTAG_PATTERN = re.compile(r"#[\w\u0400-\u04FF\u2019\u02BB\u02BC]+", re.IGNORECASE)
 JOB_SIGNAL_PATTERNS = [
     re.compile(r"ishga\s+taklif\s+qilin", re.IGNORECASE),
@@ -128,6 +129,27 @@ FULL_HEADING_FALLBACK_PATTERN = re.compile(
 
 class Parser(BaseParser):
     def parse(self, message: "Message") -> Job | None:
+        context = self._prepare_context(message)
+        if context is None:
+            return None
+
+        cleaned_text, lines = context
+        return self._build_single_job(message, cleaned_text, lines)
+
+    def parse_many(self, message: "Message") -> list[Job]:
+        context = self._prepare_context(message)
+        if context is None:
+            return []
+
+        cleaned_text, lines = context
+        split_jobs = self._build_multi_jobs(message, lines)
+        if split_jobs:
+            return split_jobs
+
+        job = self._build_single_job(message, cleaned_text, lines)
+        return [job] if job is not None else []
+
+    def _prepare_context(self, message: "Message") -> tuple[str, list[str]] | None:
         text = self.get_message_text(message)
         if not text:
             return None
@@ -142,6 +164,9 @@ class Parser(BaseParser):
         if self._has_blocked_signal(lines, cleaned_text):
             return None
 
+        return cleaned_text, lines
+
+    def _build_single_job(self, message: "Message", cleaned_text: str, lines: list[str]) -> Job | None:
         heading_index, heading = self._extract_heading(lines)
         role_lines = self._extract_role_lines(lines, heading_index)
         company = self._extract_company(lines, heading)
@@ -159,6 +184,83 @@ class Parser(BaseParser):
             location=location,
             salary=salary,
             description=cleaned_text,
+        )
+
+    def _build_multi_jobs(self, message: "Message", lines: list[str]) -> list[Job]:
+        heading_index, heading = self._extract_heading(lines)
+        if not self._looks_like_split_multi_role_post(lines, heading_index):
+            return []
+
+        role_indices = self._find_split_role_indices(lines, heading_index + 1)
+        if len(role_indices) < 2:
+            return []
+
+        prefix_lines = lines[: heading_index + 1]
+        company = self._extract_company(lines, heading)
+        original_url = self.build_message_url(message)
+        blocks = [
+            lines[start : role_indices[index + 1] if index + 1 < len(role_indices) else len(lines)]
+            for index, start in enumerate(role_indices)
+        ]
+        shared_tail = self._extract_shared_tail_lines(blocks[-1])
+
+        jobs: list[Job] = []
+        for index, block in enumerate(blocks):
+            title = self._compact_title(block[0])
+            if not title:
+                continue
+
+            block_lines = prefix_lines + block
+            if index < len(blocks) - 1 and shared_tail:
+                block_lines.extend(shared_tail)
+
+            description = "\n".join(block_lines)
+            location = self._extract_location(block_lines, heading, company)
+            salary = self._extract_salary(block_lines)
+            job = self.build_job(
+                message=message,
+                title=title,
+                company=company,
+                location=location,
+                salary=salary,
+                description=description,
+                url=f"{original_url}#role-{index + 1}",
+            )
+            if job is not None:
+                jobs.append(job)
+
+        return jobs
+
+    def _looks_like_split_multi_role_post(self, lines: list[str], heading_index: int) -> bool:
+        heading = lines[heading_index].lower() if 0 <= heading_index < len(lines) else ""
+        return any(
+            marker in heading
+            for marker in ("quyidagi lavozim", "lavozimlar", "должност", "на должность", "на следующие должности")
+        )
+
+    def _find_split_role_indices(self, lines: list[str], start_index: int) -> list[int]:
+        indices: list[int] = []
+        for index in range(start_index, len(lines)):
+            if self._is_followup_role_heading(lines, index):
+                indices.append(index)
+        return indices
+
+    def _extract_shared_tail_lines(self, block_lines: list[str]) -> list[str]:
+        tail: list[str] = []
+        for line in reversed(block_lines):
+            if self._is_noise_line(line):
+                continue
+            if self._is_shared_tail_line(line):
+                tail.append(line)
+                continue
+            break
+        return list(reversed(tail))
+
+    def _is_shared_tail_line(self, line: str) -> bool:
+        lowered = line.lower()
+        return (
+            lowered.startswith(("manzil", "mo'ljal", "tel", "telefon", "aloqa", "murojaat"))
+            or self._looks_like_phone_line(line)
         )
 
     def _looks_like_job_post(self, text: str) -> bool:
@@ -311,7 +413,7 @@ class Parser(BaseParser):
                     continue
                 if line.startswith(BENEFIT_PREFIXES):
                     continue
-                salary_lines.append(self._strip_bullet(line))
+                salary_lines.append(self._cleanup_salary_line(self._strip_bullet(line)))
 
         if not salary_lines:
             return None
@@ -328,9 +430,10 @@ class Parser(BaseParser):
 
     def _is_noise_line(self, line: str) -> bool:
         lowered = line.lower()
+        normalized = self._strip_bullet(line).lower().lstrip("👉☝👇 ")
         if lowered in {"#ish", "ish", "vakansiya"}:
             return True
-        return any(lowered.startswith(prefix) for prefix in NOISE_PREFIXES)
+        return any(lowered.startswith(prefix) or normalized.startswith(prefix) for prefix in NOISE_PREFIXES)
 
     def _is_section_line(self, line: str) -> bool:
         lowered = line.lower()
@@ -422,7 +525,7 @@ class Parser(BaseParser):
 
     def _is_contact_line(self, line: str) -> bool:
         lowered = line.lower()
-        return lowered.startswith(("tel", "telefon", "aloqa", "murojaat", "rezyume", "тел", "контакт"))
+        return lowered.startswith(("tel", "telefon", "aloqa", "murojaat", "rezyume", "тел", "контакт")) or self._looks_like_phone_line(line)
 
     def _normalize_line(self, line: str) -> str:
         compact = re.sub(r"\s+", " ", line.strip())
@@ -491,6 +594,15 @@ class Parser(BaseParser):
         cleaned = re.sub(r"\b(?:kerak|talab\s+etiladi)\b.*", "", cleaned, flags=re.IGNORECASE)
         cleaned = re.sub(r"приглашает\s+на\s+работу.*", "", cleaned, flags=re.IGNORECASE)
         return cleaned.strip()
+
+    def _looks_like_phone_line(self, line: str) -> bool:
+        return PHONE_PATTERN.search(line) is not None
+
+    def _cleanup_salary_line(self, line: str) -> str:
+        cleaned = line.strip()
+        cleaned = re.sub(r"^(?:ish\s+vaqti\s+va\s+oylik)\s+", "", cleaned, flags=re.IGNORECASE)
+        cleaned = re.sub(r"^(?:oylik|maosh|kunlik)\s*[:\-]?\s*", "", cleaned, flags=re.IGNORECASE)
+        return cleaned.strip(" -:;,.")
 
     def _extract_heading_location(self, heading: str, company: str | None) -> str | None:
         if not heading:

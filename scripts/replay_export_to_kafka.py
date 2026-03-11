@@ -84,12 +84,13 @@ async def main() -> None:
                     channel=record.get("channel") or registrations[args.plugin].channel,
                     contact_links=record.get("contact_links"),
                 )
-                job = parser.parse(message)
-                if job is None:
+                jobs = parser.parse_many(message)
+                if not jobs:
                     skipped += 1
                     continue
-                await producer.publish(job)
-                parsed += 1
+                for job in jobs:
+                    await producer.publish(job)
+                    parsed += 1
     finally:
         await producer.stop()
 

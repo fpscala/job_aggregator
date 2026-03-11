@@ -54,7 +54,8 @@ def main() -> None:
 
     parser = registrations[args.plugin].parser
     total = 0
-    parsed = 0
+    parsed_messages = 0
+    parsed_jobs = 0
     missing_salary = 0
     missing_location = 0
     failures: list[dict[str, object]] = []
@@ -71,24 +72,27 @@ def main() -> None:
                 channel=record.get("channel") or registrations[args.plugin].channel,
                 contact_links=record.get("contact_links"),
             )
-            job = parser.parse(message)
-            if job is None:
+            jobs = parser.parse_many(message)
+            if not jobs:
                 if len(failures) < 20:
                     failures.append({"id": message.id, "text": message.raw_text[:400]})
                 continue
 
-            parsed += 1
-            if not job.salary:
-                missing_salary += 1
-            if not job.location:
-                missing_location += 1
-            if len(examples) < 5:
-                examples.append(job)
+            parsed_messages += 1
+            parsed_jobs += len(jobs)
+            for job in jobs:
+                if not job.salary:
+                    missing_salary += 1
+                if not job.location:
+                    missing_location += 1
+                if len(examples) < 5:
+                    examples.append(job)
 
-    success_rate = (parsed / total * 100) if total else 0.0
+    success_rate = (parsed_messages / total * 100) if total else 0.0
     print(f"Total messages: {total}")
-    print(f"Parsed jobs: {parsed}")
-    print(f"Success rate: {success_rate:.2f}%")
+    print(f"Messages with parsed jobs: {parsed_messages}")
+    print(f"Parsed jobs: {parsed_jobs}")
+    print(f"Message success rate: {success_rate:.2f}%")
     print(f"Missing salary: {missing_salary}")
     print(f"Missing location: {missing_location}")
 
