@@ -16,16 +16,47 @@ object XorazmIshSourceJobEtl extends SourceJobEtl {
     )
 
   private val RequirementsMarkers =
-    List("talablar", "umumiy talablar", "требования", "общие требования")
+    List(
+      "talablar",
+      "umumiy talablar",
+      "требования",
+      "общие требования",
+      "талаблар",
+      "умумий талаблар",
+    )
 
   private val ResponsibilitiesMarkers =
-    List("vazifasi", "vazifalar", "asosiy vazifalar", "обязанности")
+    List(
+      "vazifasi",
+      "vazifalar",
+      "asosiy vazifalar",
+      "обязанности",
+      "вазифаси",
+      "вазифалар",
+      "асосий вазифалар",
+    )
 
   private val BenefitsMarkers =
-    List("qulayliklar", "biz taklif qilamiz", "мы предлагаем")
+    List(
+      "qulayliklar",
+      "biz taklif qilamiz",
+      "мы предлагаем",
+      "қулайликлар",
+      "биз таклиф қиламиз",
+      "биз нималарни таклиф қиламиз",
+    )
 
   private val WorkScheduleMarkers =
-    List("ish vaqti", "ish tartibi", "ish grafigi", "рабочее время", "график работы")
+    List(
+      "ish vaqti",
+      "ish tartibi",
+      "ish grafigi",
+      "рабочее время",
+      "график работы",
+      "иш вақти",
+      "иш тартиби",
+      "иш графиги",
+    )
 
   private val ContactSectionMarkers =
     List(
@@ -38,6 +69,12 @@ object XorazmIshSourceJobEtl extends SourceJobEtl {
       "ariza topshirish",
       "kontak",
       "контакты",
+      "мурожаат учун",
+      "мурожаат",
+      "алоқа учун",
+      "алоқа",
+      "боғланиш",
+      "ариза топшириш",
     )
 
   private val AdditionalSectionMarkers =
@@ -53,6 +90,11 @@ object XorazmIshSourceJobEtl extends SourceJobEtl {
       "transport yo'nalishlari",
       "transport yonalishlari",
       "transport yunalishlari",
+      "эслатма",
+      "қўшимча",
+      "қўшимча маълумот",
+      "қўшимча маълумотлар",
+      "транспорт йўналишлари",
     )
 
   private val ContactInstructionMarkers =
@@ -70,6 +112,16 @@ object XorazmIshSourceJobEtl extends SourceJobEtl {
       "quyidagi havola orqali",
       "quyidagi profilga yuboring",
       "havola orqali anketani",
+      "телеграм орқали",
+      "тўлдириш учун анкета",
+      "анкета орқали",
+      "резюменгизни",
+      "резумеларингизни",
+      "резюме",
+      "резуме",
+      "қуйидаги ҳавола орқали",
+      "қуйидаги профилга юборинг",
+      "ҳавола орқали анкетани",
     )
 
   private val MetadataMarkers =
@@ -87,6 +139,15 @@ object XorazmIshSourceJobEtl extends SourceJobEtl {
       "заработная плата",
       "адрес",
       "ориентир",
+      "ойлик",
+      "маош",
+      "иш ҳақи",
+      "кунлик",
+      "манзил",
+      "мўлжал",
+      "иш жойи",
+      "корхона",
+      "компания",
     )
 
   private val SalaryMetadataMarkers =
@@ -97,6 +158,10 @@ object XorazmIshSourceJobEtl extends SourceJobEtl {
       "kunlik",
       "зарплата",
       "заработная плата",
+      "ойлик",
+      "маош",
+      "иш ҳақи",
+      "кунлик",
     )
 
   private val SectionMarkers =
@@ -145,9 +210,16 @@ object XorazmIshSourceJobEtl extends SourceJobEtl {
 
     val requirements = extractSection(
       lines = lines,
-      start = line => startsWithAny(line, RequirementsMarkers) || normalized(line).contains("talablari bor"),
+      start =
+        line =>
+          startsWithAny(line, RequirementsMarkers) ||
+            normalized(line).contains("talablari bor") ||
+            normalized(line).contains("талаблари бор"),
       stripLabels = RequirementsMarkers,
-      resetFirstLine = line => normalized(line).contains("talablari bor"),
+      resetFirstLine =
+        line =>
+          normalized(line).contains("talablari bor") ||
+            normalized(line).contains("талаблари бор"),
     )
     val responsibilities =
       extractSection(
@@ -382,11 +454,17 @@ object XorazmIshSourceJobEtl extends SourceJobEtl {
     ContactInstructionMarkers.exists(key.contains) ||
     key.contains("qo'shimcha ma'lumotlar uchun") ||
     key.contains("qo’shimcha ma’lumotlar uchun") ||
+    key.contains("қўшимча маълумотлар учун") ||
     key.contains("havolani bosib") ||
+    key.contains("ҳаволани босиб") ||
     key.contains("ustiga bosing") ||
+    key.contains("устига босинг") ||
     key.contains("murojaat qiling") ||
+    key.contains("мурожаат қилинг") ||
     key.contains("rezyumengizni") ||
-    key.contains("rezumelaringizni")
+    key.contains("rezumelaringizni") ||
+    key.contains("резюменгизни") ||
+    key.contains("резумеларингизни")
   }
 
   private def containsPhoneNumber(line: String): Boolean =
@@ -470,7 +548,12 @@ object XorazmIshSourceJobEtl extends SourceJobEtl {
 
     val normalized = normalizeWhitespace(cleaned)
     val key = normalized.toLowerCase
-    if (key.contains("biz bilan bog'lan") || key.contains("murojaat qiling")) ""
+    if (
+      key.contains("biz bilan bog'lan") ||
+      key.contains("murojaat qiling") ||
+      key.contains("биз билан боғлан") ||
+      key.contains("мурожаат қилинг")
+    ) ""
     else normalized
   }
 
@@ -520,7 +603,11 @@ object XorazmIshSourceJobEtl extends SourceJobEtl {
       key.contains("kpi") ||
       key.contains("opit") ||
       key.contains("qarab") ||
-      key.contains("belgilanadi")
+      key.contains("belgilanadi") ||
+      key.contains("сўм") ||
+      key.contains("сум") ||
+      key.contains("қараб") ||
+      key.contains("белгиланади")
     }
   }
 
@@ -529,16 +616,23 @@ object XorazmIshSourceJobEtl extends SourceJobEtl {
 
     TimeValuePattern.findFirstIn(line).nonEmpty ||
     ScheduleRatioPattern.findFirstIn(key).nonEmpty ||
+    key.contains("ҳафтада") ||
     key.contains("haftada") ||
+    key.contains("якшанба") ||
     key.contains("smena") ||
     key.contains("смена") ||
     key.contains("yakshanba") ||
     key.contains("dam olish") ||
+    key.contains("дам олиш") ||
     key.contains("qulay grafik") ||
+    key.contains("қулай график") ||
     key.contains("faslga qarab") ||
+    key.contains("фаслга қараб") ||
     key.contains("to'liq stavka") ||
     key.contains("to‘liq stavka") ||
-    key.contains("grafik")
+    key.contains("тўлиқ ставка") ||
+    key.contains("grafik") ||
+    key.contains("график")
   }
 
   private def isBulletLikeLine(line: String): Boolean = {

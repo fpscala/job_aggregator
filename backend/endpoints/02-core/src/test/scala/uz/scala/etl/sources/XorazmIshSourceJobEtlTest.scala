@@ -453,4 +453,68 @@ object XorazmIshSourceJobEtlTest extends SimpleIOSuite {
     expect.same("Ishchilar", lowerTitle.title) &&
     expect.same("AQEM", acronymTitle.title)
   }
+
+  pureTest("extracts structured sections from cyrillic posts") {
+    val rawJob =
+      RawJob(
+        title = "муҳандис",
+        company = Some("Матбаа paper management group"),
+        description =
+          """🔥 MATBAA PAPER MANAGEMENT GROUP
+            |
+            |Талаблар:
+            |• Рус тилини билиши
+            |• 30-50 ёш чегарасида бўлиш
+            |
+            |Вазифалар:
+            |• Назорат қилиш
+            |• Ҳужжатларни юритиш
+            |
+            |Биз таклиф қиламиз:
+            |• Бепул тушлик
+            |• Расмий иш
+            |
+            |Қўшимча:
+            |• Карьерада янги босқич
+            |
+            |Мурожаат учун:
+            |Анкета ни тўлдиринг
+            |https://example.com/apply
+            |
+            |@Xorazm_ish""".stripMargin,
+        salary = Some("5 000 000 - 8 000 000 сўм"),
+        location = Some("Urganch"),
+        source = "xorazm_ish",
+        url = "https://t.me/Xorazm_ish/131",
+        postedAt = postedAt,
+        contactLinks = None,
+      )
+
+    val details = XorazmIshSourceJobEtl.enrich(rawJob)
+
+    expect.same(
+      Some("Рус тилини билиши\n30-50 ёш чегарасида бўлиш"),
+      details.requirements,
+    ) &&
+    expect.same(
+      Some("Назорат қилиш\nҲужжатларни юритиш"),
+      details.responsibilities,
+    ) &&
+    expect.same(
+      Some("Бепул тушлик\nРасмий иш"),
+      details.benefits,
+    ) &&
+    expect.same(
+      Some("Қўшимча\nКарьерада янги босқич"),
+      details.additional,
+    ) &&
+    expect.same(
+      Some("Анкета ни тўлдиринг"),
+      details.contactText,
+    ) &&
+    expect.same(
+      List("https://example.com/apply"),
+      details.contactLinks,
+    )
+  }
 }

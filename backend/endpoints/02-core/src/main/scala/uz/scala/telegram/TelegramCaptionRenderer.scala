@@ -17,6 +17,16 @@ object TelegramCaptionRenderer {
     "onlayn anketa",
     "anketa",
     "bot",
+    "мурожаат",
+    "мурожаат учун",
+    "алоқа",
+    "телефон",
+    "тел",
+    "телеграм",
+    "телеграм орқали",
+    "онлайн анкета",
+    "анкета",
+    "бот",
   )
   private val LowValueAdditionalPrefixes = Set(
     "bog'lanish",
@@ -36,6 +46,20 @@ object TelegramCaptionRenderer {
     "ish haqi",
     "maosh",
     "oylik",
+    "боғланиш",
+    "мурожаат",
+    "мурожаат учун",
+    "алоқа",
+    "алоқа учун",
+    "телефон",
+    "телефон рақам",
+    "телефон рақами",
+    "тел",
+    "мўлжал",
+    "манзил",
+    "иш ҳақи",
+    "маош",
+    "ойлик",
   )
   private val DecorativePrefixChars = Set(
     '•',
@@ -60,8 +84,41 @@ object TelegramCaptionRenderer {
     ',',
     '.',
   )
+  private val LatinLabels =
+    Labels(
+      company = "Kompaniya",
+      salary = "Maosh",
+      location = "Manzil",
+      workSchedule = "Ish vaqti",
+      requirements = "Talablar",
+      responsibilities = "Vazifalar",
+      benefits = "Qulayliklar",
+      additional = "Qo'shimcha",
+      contact = "Murojaat",
+      telegram = "Telegram",
+      phone = "Telefon",
+      links = "Havolalar",
+      linkItem = "Murojaat",
+    )
+  private val CyrillicLabels =
+    Labels(
+      company = "Компания",
+      salary = "Маош",
+      location = "Манзил",
+      workSchedule = "Иш вақти",
+      requirements = "Талаблар",
+      responsibilities = "Вазифалар",
+      benefits = "Қулайликлар",
+      additional = "Қўшимча",
+      contact = "Мурожаат",
+      telegram = "Telegram",
+      phone = "Телефон",
+      links = "Ҳаволалар",
+      linkItem = "Мурожаат",
+    )
 
   def render(job: Job, footerHandle: Option[String] = None): String = {
+    val labels = labelsFor(job)
     val footerBlock = renderFooter(footerHandle)
     val footerBudget =
       footerBlock.map(blockLength).map(_ + SectionSeparator.length).getOrElse(0)
@@ -70,19 +127,19 @@ object TelegramCaptionRenderer {
       blocks =
         List(
           renderHeadline(job.title),
-          renderMeta(job),
-          renderSection("📋", "Talablar", job.requirements),
-          renderSection("🛠", "Vazifalar", job.responsibilities),
-          renderSection("🎁", "Qulayliklar", job.benefits),
-          renderAdditionalSection(job),
-          renderContactSection(job),
+          renderMeta(job, labels),
+          renderSection("📋", labels.requirements, job.requirements),
+          renderSection("🛠", labels.responsibilities, job.responsibilities),
+          renderSection("🎁", labels.benefits, job.benefits),
+          renderAdditionalSection(job, labels),
+          renderContactSection(job, labels),
           renderList(
             "💬",
-            "Telegram",
+            labels.telegram,
             job.contactTelegramUsernames.map(username => s"@$username"),
           ),
-          renderLinks(job.contactLinks),
-          renderList("☎️", "Telefon", job.contactPhoneNumbers),
+          renderLinks(job.contactLinks, labels),
+          renderList("☎️", labels.phone, job.contactPhoneNumbers),
         ).flatten,
       maxLength = MaxCaptionLength - footerBudget,
     )
@@ -103,12 +160,12 @@ object TelegramCaptionRenderer {
       )
     }
 
-  private def renderMeta(job: Job): Option[RenderBlock] =
+  private def renderMeta(job: Job, labels: Labels): Option[RenderBlock] =
     List(
-      renderInlineField("🏢", "Kompaniya", job.company),
-      renderInlineField("💸", "Maosh", job.salary),
-      renderInlineField("📍", "Manzil", job.location),
-      renderInlineField("🕒", "Ish vaqti", job.workSchedule),
+      renderInlineField("🏢", labels.company, job.company),
+      renderInlineField("💸", labels.salary, job.salary),
+      renderInlineField("📍", labels.location, job.location),
+      renderInlineField("🕒", labels.workSchedule, job.workSchedule),
     ).flatten match {
       case Nil => None
       case lines =>
@@ -134,10 +191,10 @@ object TelegramCaptionRenderer {
   private def renderSection(icon: String, label: String, value: Option[String]): Option[RenderBlock] =
     renderBulletBlock(icon, label, splitMeaningfulLines(value))
 
-  private def renderContactSection(job: Job): Option[RenderBlock] =
+  private def renderContactSection(job: Job, labels: Labels): Option[RenderBlock] =
     renderBulletBlock(
       "📨",
-      "Murojaat",
+      labels.contact,
       sanitizeContactLines(
         value = job.contactText,
         usernames = job.contactTelegramUsernames,
@@ -146,10 +203,10 @@ object TelegramCaptionRenderer {
       ),
     )
 
-  private def renderAdditionalSection(job: Job): Option[RenderBlock] =
+  private def renderAdditionalSection(job: Job, labels: Labels): Option[RenderBlock] =
     renderBulletBlock(
       "✨",
-      "Qo'shimcha",
+      labels.additional,
       sanitizeAdditionalLines(
         value = job.additional,
         phoneNumbers = job.contactPhoneNumbers,
@@ -161,7 +218,7 @@ object TelegramCaptionRenderer {
   private def renderList(icon: String, label: String, values: List[String]): Option[RenderBlock] =
     renderBulletBlock(icon, label, values.map(normalizeDecorated).filter(_.nonEmpty).distinct)
 
-  private def renderLinks(values: List[String]): Option[RenderBlock] =
+  private def renderLinks(values: List[String], labels: Labels): Option[RenderBlock] =
     values
       .map(normalizeDecorated)
       .filter(_.nonEmpty)
@@ -172,15 +229,15 @@ object TelegramCaptionRenderer {
         Some(
           RenderBlock(
             lines =
-              "🔗 <b>Havolalar:</b>" +:
+              s"🔗 <b>${labels.links}:</b>" +:
                 links.map {
                   case (link, index) =>
-                    s"""• <a href="${escapeAttribute(link)}">Murojaat ${index + 1}</a>"""
+                    s"""• <a href="${escapeAttribute(link)}">${labels.linkItem} ${index + 1}</a>"""
                 },
             plainLines =
-              "🔗 Havolalar:" +:
+              s"🔗 ${labels.links}:" +:
                 links.map {
-                  case (_, index) => s"• Murojaat ${index + 1}"
+                  case (_, index) => s"• ${labels.linkItem} ${index + 1}"
                 },
             allowPartial = false,
           )
@@ -373,10 +430,14 @@ object TelegramCaptionRenderer {
         LowValueContactPhrases.contains(compactNoColon) ||
         compact.contains("biz bilan bog'lan") ||
         compact.contains("murojaat qiling") ||
+        compact.contains("биз билан боғлан") ||
+        compact.contains("мурожаат қилинг") ||
         (compact.exists(_.isDigit) &&
           (compact.contains("som") ||
             compact.contains("so'm") ||
             compact.contains("so‘m") ||
+            compact.contains("сўм") ||
+            compact.contains("сум") ||
             compact.contains("mln") ||
             compact.contains("million") ||
             compact.contains("ming"))) ||
@@ -420,6 +481,45 @@ object TelegramCaptionRenderer {
 
   private def escapeAttribute(value: String): String =
     escape(value).replace("\"", "&quot;")
+
+  private def labelsFor(job: Job): Labels =
+    if (
+      containsCyrillic(
+        List(
+          job.title,
+          job.description,
+        ) ++
+          job.company.toList ++
+          job.salary.toList ++
+          job.location.toList ++
+          job.requirements.toList ++
+          job.responsibilities.toList ++
+          job.benefits.toList ++
+          job.additional.toList ++
+          job.workSchedule.toList ++
+          job.contactText.toList
+      )
+    ) CyrillicLabels
+    else LatinLabels
+
+  private def containsCyrillic(values: List[String]): Boolean =
+    values.exists(_.exists(ch => Character.UnicodeBlock.of(ch) == Character.UnicodeBlock.CYRILLIC))
+
+  private final case class Labels(
+      company: String,
+      salary: String,
+      location: String,
+      workSchedule: String,
+      requirements: String,
+      responsibilities: String,
+      benefits: String,
+      additional: String,
+      contact: String,
+      telegram: String,
+      phone: String,
+      links: String,
+      linkItem: String,
+    )
 
   private final case class RenderBlock(
       lines: List[String],

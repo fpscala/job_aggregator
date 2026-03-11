@@ -130,4 +130,32 @@ object TelegramCaptionRendererTest extends SimpleIOSuite with Checkers {
     expect(additionalIndex >= 0) &&
     expect(phoneIndex > additionalIndex)
   }
+
+  pureTest("renders cyrillic labels for cyrillic jobs") {
+    val rendered =
+      TelegramCaptionRenderer.render(
+        job.copy(
+          title = "Муҳандис",
+          description = "Кирилл матн",
+          company = Some("Матбаа"),
+          salary = Some("5 000 000 сўм"),
+          location = Some("Урганч"),
+          requirements = Some("Рус тилини билиши"),
+          responsibilities = Some("Назорат қилиш"),
+          benefits = Some("Бепул тушлик"),
+          additional = Some("Карьерада янги босқич"),
+          workSchedule = Some("08:00 - 17:00"),
+          contactText = Some("Анкета ни тўлдиринг"),
+        )
+      )
+
+    expect(rendered.contains("🏢 <b>Компания:</b> Матбаа")) &&
+    expect(rendered.contains("🕒 <b>Иш вақти:</b> 08:00 - 17:00")) &&
+    expect(rendered.contains("📋 <b>Талаблар:</b>")) &&
+    expect(rendered.contains("🎁 <b>Қулайликлар:</b>")) &&
+    expect(rendered.contains("✨ <b>Қўшимча:</b>")) &&
+    expect(rendered.contains("📨 <b>Мурожаат:</b>")) &&
+    expect(rendered.contains("🔗 <b>Ҳаволалар:</b>")) &&
+    expect(rendered.contains("""<a href="https://example.com/apply">Мурожаат 1</a>"""))
+  }
 }
