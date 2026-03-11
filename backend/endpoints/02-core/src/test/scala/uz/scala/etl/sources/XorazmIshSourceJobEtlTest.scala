@@ -244,6 +244,59 @@ object XorazmIshSourceJobEtlTest extends SimpleIOSuite {
     expect.same(List("+998918682219", "+998918682210"), details.contactPhoneNumbers)
   }
 
+  pureTest("stops requirements before sharoitlar and emoji contact markers") {
+    val rawJob =
+      RawJob(
+        title = "Ofitsiant",
+        company = Some("Kafe"),
+        description =
+          """🔥 Ofitsiant
+            |🏢 Kompaniya: Kafe
+            |💰 Maosh: Yaxshi maosh (suhbat asosida)
+            |⏰ Ish vaqti: Smena asosida
+            |
+            |📋 Talablar:
+            |• Xushmuomala bo'lishi
+            |• Mas'uliyatli va chaqqon
+            |• Jamoa bilan ishlay olishi
+            |• Tozalik va tartibni bilishi
+            |• Tajribasi bo'lsa afzal
+            |
+            |🧾 Sharoitlar:
+            |• Yaxshi maosh
+            |• Smena asosida ish
+            |• Rasmiy ish
+            |• Qulay ish muhiti
+            |
+            |☎️ Bog'lanish:
+            |• +998 99 776 40 46
+            |
+            |👉 @Xorazm_ish_bor_elonlar""".stripMargin,
+        salary = Some("Yaxshi maosh (suhbat asosida)"),
+        location = None,
+        source = "xorazm_ish_bor_elonlar",
+        url = "https://t.me/Xorazm_ish_bor_elonlar/999996",
+        postedAt = postedAt,
+        contactLinks = None,
+      )
+
+    val details = XorazmIshSourceJobEtl.enrich(rawJob)
+
+    expect.same(
+      Some(
+        "Xushmuomala bo'lishi\nMas'uliyatli va chaqqon\nJamoa bilan ishlay olishi\nTozalik va tartibni bilishi\nTajribasi bo'lsa afzal"
+      ),
+      details.requirements,
+    ) &&
+    expect.same(
+      Some("Yaxshi maosh\nSmena asosida ish\nRasmiy ish\nQulay ish muhiti"),
+      details.benefits,
+    ) &&
+    expect.same(None, details.additional) &&
+    expect.same(None, details.contactText) &&
+    expect.same(List("+998997764046"), details.contactPhoneNumbers)
+  }
+
   pureTest("keeps salary continuation and contact cta out of additional") {
     val rawJob =
       RawJob(

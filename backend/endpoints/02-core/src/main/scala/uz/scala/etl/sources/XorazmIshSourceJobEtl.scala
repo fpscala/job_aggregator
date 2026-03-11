@@ -38,9 +38,15 @@ object XorazmIshSourceJobEtl extends SourceJobEtl {
 
   private val BenefitsMarkers =
     List(
+      "sharoitlar",
+      "sharoit",
+      "shart-sharoitlar",
       "qulayliklar",
       "biz taklif qilamiz",
       "мы предлагаем",
+      "шароитлар",
+      "шароит",
+      "шарт-шароитлар",
       "қулайликлар",
       "биз таклиф қиламиз",
       "биз нималарни таклиф қиламиз",
@@ -561,7 +567,7 @@ object XorazmIshSourceJobEtl extends SourceJobEtl {
     normalizeWhitespace(stripDecorations(stripBullet(line)))
 
   private def stripLabelsFromLine(line: String, labels: List[String]): String =
-    labels.foldLeft(line) { case (current, label) =>
+    labels.foldLeft(stripJoiners(line)) { case (current, label) =>
       LeadingDecorationPattern
         .replaceFirstIn(current, "")
         .replaceFirst(
@@ -666,15 +672,22 @@ object XorazmIshSourceJobEtl extends SourceJobEtl {
   private def normalized(line: String): String =
     normalizeWhitespace(
       stripDecorations(
-        line
-          .replace('’', '\'')
-          .replace('ʻ', '\'')
-          .replace('ʼ', '\'')
+        stripJoiners(
+          line
+            .replace('’', '\'')
+            .replace('ʻ', '\'')
+            .replace('ʼ', '\'')
+        )
       )
     ).toLowerCase
 
   private def stripDecorations(line: String): String =
-    TrailingDecorationPattern.replaceFirstIn(LeadingDecorationPattern.replaceFirstIn(line, ""), "")
+    TrailingDecorationPattern.replaceFirstIn(LeadingDecorationPattern.replaceFirstIn(stripJoiners(line), ""), "")
+
+  private def stripJoiners(line: String): String =
+    line
+      .replace("\uFE0F", "")
+      .replace("\u200D", "")
 
   private def stripBullet(line: String): String =
     line.replaceFirst("""(?u)^\s*[•▪◦●✔✅❗👤👉➤▶✓\-]+\s*""", "")
