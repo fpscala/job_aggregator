@@ -20,7 +20,7 @@ async def main() -> None:
     loader = PluginLoader(settings.parsers_path)
     registrations = loader.load()
     if not registrations:
-        raise RuntimeError(f"No parser plugins were loaded from {settings.parsers_path}")
+        raise RuntimeError(f"No source registrations were loaded from {settings.parsers_path}")
 
     producer = KafkaJobProducer(settings)
     client = TelegramJobClient(settings=settings, registrations=registrations, producer=producer)

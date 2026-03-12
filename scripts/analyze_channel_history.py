@@ -38,8 +38,8 @@ class ExportedMessage:
 
 
 def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Analyze exported Telegram posts with a parser plugin")
-    parser.add_argument("--plugin", required=True, help="Parser plugin folder name, e.g. xorazm_ish")
+    parser = argparse.ArgumentParser(description="Analyze exported Telegram posts with the raw collector pipeline")
+    parser.add_argument("--plugin", required=True, help="Source config folder name, e.g. xorazm_ish")
     parser.add_argument("--input", required=True, type=Path, help="Path to exported JSONL file")
     return parser.parse_args()
 

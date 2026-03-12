@@ -116,7 +116,7 @@ class TelegramJobClient:
                 jobs = registration.parser.parse_many(message)
             except Exception:
                 logger.exception(
-                    "Parser '%s' failed for channel '%s' message_id=%s",
+                    "Raw event build failed for source '%s' channel '%s' message_id=%s",
                     registration.plugin_name,
                     registration.channel,
                     getattr(message, "id", None),
@@ -125,7 +125,7 @@ class TelegramJobClient:
 
             if not jobs:
                 logger.debug(
-                    "Parser '%s' skipped message_id=%s from channel '%s'",
+                    "Skipped empty raw message for source '%s' message_id=%s from channel '%s'",
                     registration.plugin_name,
                     getattr(message, "id", None),
                     registration.channel,
@@ -134,8 +134,7 @@ class TelegramJobClient:
 
             for job in jobs:
                 logger.info(
-                    "Parsed job title='%s' source='%s' message_id=%s",
-                    job.title,
+                    "Prepared raw job event source='%s' message_id=%s",
                     job.source,
                     getattr(message, "id", None),
                 )

@@ -40,8 +40,8 @@ class ExportedMessage:
 
 
 def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Replay exported Telegram posts into Kafka via the parser plugin")
-    parser.add_argument("--plugin", required=True, help="Parser plugin folder name, e.g. xorazm_ish")
+    parser = argparse.ArgumentParser(description="Replay exported Telegram posts into Kafka as raw collector events")
+    parser.add_argument("--plugin", required=True, help="Source config folder name, e.g. xorazm_ish")
     parser.add_argument("--input", required=True, type=Path, help="Path to exported JSONL file")
     parser.add_argument("--limit", type=int, default=None, help="Optional limit of exported records to read")
     parser.add_argument("--topic", default=None, help="Override Kafka topic name")
