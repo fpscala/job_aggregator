@@ -130,6 +130,27 @@ object StructuredPostParserTest extends SimpleIOSuite {
     )
   }
 
+  pureTest("starts a new contact section at Bog'lanish and keeps requirements clean") {
+    val originalPost =
+      """Operator
+        |Kompaniya: Test Call Center
+        |Talablar:
+        |- Xushmuomala
+        |- Mas'uliyatli
+        |Bog‘lanish:
+        |+998 90 123 45 67
+        |@test_hr
+        |Manzil: Urganch
+        |Ish vaqti: 09:00-18:00""".stripMargin
+
+    val parsed = expectParsed(rawJob(description = originalPost))
+
+    expect.same(Some("Xushmuomala\nMas'uliyatli"), parsed.details.requirements) &&
+    expect.same(List("+998901234567"), parsed.details.contactPhoneNumbers) &&
+    expect.same(List("test_hr"), parsed.details.contactTelegramUsernames) &&
+    expect.same(None, parsed.details.contactText)
+  }
+
   pureTest("rejects non structured posts") {
     val rejected =
       expectRejected(

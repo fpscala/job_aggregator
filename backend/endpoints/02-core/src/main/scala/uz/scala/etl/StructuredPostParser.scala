@@ -196,9 +196,11 @@ object StructuredPostParser {
       LabelAlias(LabelKind.Application, "murojaat"),
       LabelAlias(LabelKind.Application, "aloqa uchun"),
       LabelAlias(LabelKind.Application, "aloqa"),
+      LabelAlias(LabelKind.Application, "bog'lanish uchun"),
       LabelAlias(LabelKind.Application, "bog'lanish"),
       LabelAlias(LabelKind.Application, "boglanish"),
       LabelAlias(LabelKind.Application, "ariza topshirish"),
+      LabelAlias(LabelKind.Application, "боғланиш учун"),
       LabelAlias(LabelKind.Application, "мурожаат учун"),
       LabelAlias(LabelKind.Application, "мурожаат"),
       LabelAlias(LabelKind.Application, "алоқа учун"),
@@ -615,6 +617,7 @@ object StructuredPostParser {
       .replace('\u00a0', ' ')
       .replace('\u200b', ' ')
       .replace('’', '\'')
+      .replace('‘', '\'')
       .replace('ʻ', '\'')
       .replace('ʼ', '\'')
       .replace('`', '\'')
