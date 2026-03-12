@@ -297,6 +297,51 @@ object XorazmIshSourceJobEtlTest extends SimpleIOSuite {
     expect.same(List("+998997764046"), details.contactPhoneNumbers)
   }
 
+  pureTest("keeps telegram call to action out of benefits and treats tel as contact boundary") {
+    val rawJob =
+      RawJob(
+        title = "Ofitsiant",
+        company = Some("Kafe"),
+        description =
+          """🔥 Ofitsiant
+            |🏢 Kompaniya: Kafe
+            |💰 Maosh: Yaxshi maosh (suhbat asosida)
+            |⏰ Ish vaqti: Smena asosida
+            |
+            |📋 Talablar:
+            |• Xushmuomala bo'lishi
+            |• Mas'uliyatli va chaqqon
+            |
+            |🧾 Qulayliklar:
+            |• Yaxshi maosh
+            |• Smena asosida ish
+            |• Rasmiy ish
+            |• Qulay ish muhiti
+            |Telegramda rezyume orqali murojaat qiling
+            |Tel: +998 99 776 40 46
+            |
+            |👉 @Xorazm_ish_bor_elonlar""".stripMargin,
+        salary = Some("Yaxshi maosh (suhbat asosida)"),
+        location = None,
+        source = "xorazm_ish_bor_elonlar",
+        url = "https://t.me/Xorazm_ish_bor_elonlar/999995",
+        postedAt = postedAt,
+        contactLinks = None,
+      )
+
+    val details = XorazmIshSourceJobEtl.enrich(rawJob)
+
+    expect.same(
+      Some("Yaxshi maosh\nSmena asosida ish\nRasmiy ish\nQulay ish muhiti"),
+      details.benefits,
+    ) &&
+    expect.same(
+      Some("Telegramda rezyume orqali murojaat qiling"),
+      details.contactText,
+    ) &&
+    expect.same(List("+998997764046"), details.contactPhoneNumbers)
+  }
+
   pureTest("keeps salary continuation and contact cta out of additional") {
     val rawJob =
       RawJob(
@@ -449,6 +494,52 @@ object XorazmIshSourceJobEtlTest extends SimpleIOSuite {
       details.contactText,
     ) &&
     expect.same(List("ostona3bot"), details.contactTelegramUsernames)
+  }
+
+  pureTest("preserves simple telegram resume instruction text") {
+    val rawJob =
+      RawJob(
+        title = "Menejer / Savdo agenti",
+        company = Some("Confectum"),
+        description =
+          """#ish
+            |"Confectum" distribitorlik kompaniyasiga quyidagi lavozimlarga ishga taklif qilinadi.
+            |
+            |▪ Menejer
+            |▪ Savdo agenti
+            |
+            |Talablar:
+            |• Yigit-qizlar
+            |• 2-3 yillik ish tajribasi bo'lishi
+            |• Shaxsiy avtomobiliga ega bo'lishi
+            |• Urganch shahri va tumanlarini yaxshi bilishi
+            |• Mas'uliyatli, chaqqon va xushmuomala bo'lishi kerak
+            |• Talabalar ishga qabul qilinmaydi
+            |
+            |Ish vaqti: 09:00 - 18:00, 6/1
+            |Oylik: KPI + bonus
+            |
+            |Manzil: Urganch shahri
+            |
+            |Telegramda rezyume orqali murojaat qiling
+            |Tel: +998995499599
+            |
+            |👉 @Xorazm_ish""".stripMargin,
+        salary = Some("KPI + bonus"),
+        location = Some("Urganch shahri"),
+        source = "xorazm_ish",
+        url = "https://t.me/Xorazm_ish/40585",
+        postedAt = postedAt,
+        contactLinks = None,
+      )
+
+    val details = XorazmIshSourceJobEtl.enrich(rawJob)
+
+    expect.same(
+      Some("Telegramda rezyume orqali murojaat qiling"),
+      details.contactText,
+    ) &&
+    expect.same(List("+998995499599"), details.contactPhoneNumbers)
   }
 
   pureTest("normalizes title into sentence case without breaking acronyms") {

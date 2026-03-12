@@ -61,6 +61,28 @@ object TelegramCaptionRendererTest extends SimpleIOSuite with Checkers {
     expect(rendered.contains("🎁 <b>Qulayliklar:</b>\n• Rasmiy ishga kirish\n• Tushlik ishxona hisobidan"))
   }
 
+  pureTest("drops leaked contact lines from benefits block") {
+    val rendered =
+      TelegramCaptionRenderer.render(
+        job.copy(
+          benefits =
+            Some(
+              "Yaxshi maosh\nSmena asosida ish\nRasmiy ish\nQulay ish muhiti\nBog'lanish\nTelegramda rezyume orqali murojaat qiling\nTel\n+998 99 776 40 46"
+            ),
+          contactText = Some("Telegramda rezyume orqali murojaat qiling"),
+          contactPhoneNumbers = List("+998997764046"),
+          contactTelegramUsernames = Nil,
+          contactLinks = Nil,
+        )
+      )
+
+    expect(rendered.contains("🎁 <b>Qulayliklar:</b>\n• Yaxshi maosh\n• Smena asosida ish\n• Rasmiy ish\n• Qulay ish muhiti")) &&
+    expect(!rendered.contains("🎁 <b>Qulayliklar:</b>\n• Yaxshi maosh\n• Smena asosida ish\n• Rasmiy ish\n• Qulay ish muhiti\n• Bog'lanish")) &&
+    expect(!rendered.contains("🎁 <b>Qulayliklar:</b>\n• Yaxshi maosh\n• Smena asosida ish\n• Rasmiy ish\n• Qulay ish muhiti\n• Telegramda rezyume orqali murojaat qiling")) &&
+    expect(rendered.contains("📨 <b>Murojaat:</b>\n• Telegramda rezyume orqali murojaat qiling")) &&
+    expect(rendered.contains("☎️ <b>Telefon:</b>\n• +998997764046"))
+  }
+
   pureTest("drops low-value contact text lines and keeps meaningful instruction") {
     val rendered =
       TelegramCaptionRenderer.render(

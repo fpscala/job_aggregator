@@ -45,36 +45,67 @@ object Job {
       id: UUID,
       createdAt: ZonedDateTime,
       details: JobDetails,
+      titleOverride: Option[String] = None,
+      companyOverride: Option[String] = None,
+      salaryOverride: Option[String] = None,
+      locationOverride: Option[String] = None,
     ): Job =
-    input
-      .into[Job]
-      .withFieldConst(_.id, id)
-      .withFieldConst(_.createdAt, createdAt)
-      .withFieldComputed(_.title, value => sentenceCaseTitle(value.title))
-      .withFieldComputed(_.sourceUrl, _.url)
-      .withFieldConst(_.requirements, details.requirements)
-      .withFieldConst(_.responsibilities, details.responsibilities)
-      .withFieldConst(_.benefits, details.benefits)
-      .withFieldConst(_.additional, details.additional)
-      .withFieldConst(_.workSchedule, details.workSchedule)
-      .withFieldConst(_.contactText, details.contactText)
-      .withFieldConst(_.contactPhoneNumbers, details.contactPhoneNumbers)
-      .withFieldConst(_.contactTelegramUsernames, details.contactTelegramUsernames)
-      .withFieldConst(_.contactLinks, details.contactLinks)
-      .withFieldConst(_.telegramPublishedAt, Option.empty[ZonedDateTime])
-      .withFieldConst(_.dedupHash, Job.deduplicationHash(input, details))
-      .withFieldConst(_.sourcePostHash, Job.sourcePostHash(input))
-      .enableOptionDefaultsToNone
-      .transform
+    {
+      val effectiveTitle = titleOverride.getOrElse(input.title)
+      val effectiveCompany = companyOverride.orElse(input.company)
+      val effectiveSalary = salaryOverride.orElse(input.salary)
+      val effectiveLocation = locationOverride.orElse(input.location)
 
-  def deduplicationHash(job: RawJob, details: JobDetails): String =
+      input
+        .into[Job]
+        .withFieldConst(_.id, id)
+        .withFieldConst(_.createdAt, createdAt)
+        .withFieldConst(_.company, effectiveCompany)
+        .withFieldConst(_.salary, effectiveSalary)
+        .withFieldConst(_.location, effectiveLocation)
+        .withFieldConst(_.title, sentenceCaseTitle(effectiveTitle))
+        .withFieldComputed(_.sourceUrl, _.url)
+        .withFieldConst(_.requirements, details.requirements)
+        .withFieldConst(_.responsibilities, details.responsibilities)
+        .withFieldConst(_.benefits, details.benefits)
+        .withFieldConst(_.additional, details.additional)
+        .withFieldConst(_.workSchedule, details.workSchedule)
+        .withFieldConst(_.contactText, details.contactText)
+        .withFieldConst(_.contactPhoneNumbers, details.contactPhoneNumbers)
+        .withFieldConst(_.contactTelegramUsernames, details.contactTelegramUsernames)
+        .withFieldConst(_.contactLinks, details.contactLinks)
+        .withFieldConst(_.telegramPublishedAt, Option.empty[ZonedDateTime])
+        .withFieldConst(
+          _.dedupHash,
+          Job.deduplicationHash(
+            job = input,
+            details = details,
+            title = effectiveTitle,
+            company = effectiveCompany,
+            location = effectiveLocation,
+            salary = effectiveSalary,
+          ),
+        )
+        .withFieldConst(_.sourcePostHash, Job.sourcePostHash(input))
+        .enableOptionDefaultsToNone
+        .transform
+    }
+
+  def deduplicationHash(
+      job: RawJob,
+      details: JobDetails,
+      title: String,
+      company: Option[String],
+      location: Option[String],
+      salary: Option[String],
+    ): String =
     sha256(
       List(
         normalize(job.source),
-        normalize(job.title),
-        normalize(job.company.getOrElse("")),
-        normalize(job.location.getOrElse("")),
-        normalize(job.salary.getOrElse("")),
+        normalize(title),
+        normalize(company.getOrElse("")),
+        normalize(location.getOrElse("")),
+        normalize(salary.getOrElse("")),
         normalize(details.requirements.getOrElse("")),
         normalize(details.responsibilities.getOrElse("")),
         normalize(details.benefits.getOrElse("")),

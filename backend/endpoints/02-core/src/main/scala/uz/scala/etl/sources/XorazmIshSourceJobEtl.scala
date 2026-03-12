@@ -70,8 +70,12 @@ object XorazmIshSourceJobEtl extends SourceJobEtl {
       "murojaat",
       "aloqa uchun",
       "aloqa",
+      "bog'lanish uchun",
+      "boglanish uchun",
       "bog'lanish",
       "boglanish",
+      "telefon raqam",
+      "telefon raqami",
       "ariza topshirish",
       "kontak",
       "контакты",
@@ -79,8 +83,19 @@ object XorazmIshSourceJobEtl extends SourceJobEtl {
       "мурожаат",
       "алоқа учун",
       "алоқа",
+      "боғланиш учун",
       "боғланиш",
+      "телефон рақам",
+      "телефон рақами",
       "ариза топшириш",
+    )
+
+  private val PhoneLabelMarkers =
+    List(
+      "tel",
+      "telefon",
+      "тел",
+      "телефон",
     )
 
   private val AdditionalSectionMarkers =
@@ -214,30 +229,43 @@ object XorazmIshSourceJobEtl extends SourceJobEtl {
         .filterNot(isSourceHandleLine(_, ignoredUsernames))
         .toVector
 
-    val requirements = extractSection(
-      lines = lines,
-      start =
-        line =>
-          startsWithAny(line, RequirementsMarkers) ||
-            normalized(line).contains("talablari bor") ||
-            normalized(line).contains("талаблари бор"),
-      stripLabels = RequirementsMarkers,
-      resetFirstLine =
-        line =>
-          normalized(line).contains("talablari bor") ||
-            normalized(line).contains("талаблари бор"),
-    )
+    val requirements =
+      sanitizeStructuredSection(
+        extractSection(
+          lines = lines,
+          start =
+            line =>
+              startsWithAny(line, RequirementsMarkers) ||
+                normalized(line).contains("talablari bor") ||
+                normalized(line).contains("талаблари бор"),
+          stripLabels = RequirementsMarkers,
+          resetFirstLine =
+            line =>
+              normalized(line).contains("talablari bor") ||
+                normalized(line).contains("талаблари бор"),
+        ),
+        ignoredUsernames = ignoredUsernames,
+        ignoredUrls = ignoredUrls,
+      )
     val responsibilities =
-      extractSection(
-        lines = lines,
-        start = startsWithAny(_, ResponsibilitiesMarkers),
-        stripLabels = ResponsibilitiesMarkers,
+      sanitizeStructuredSection(
+        extractSection(
+          lines = lines,
+          start = startsWithAny(_, ResponsibilitiesMarkers),
+          stripLabels = ResponsibilitiesMarkers,
+        ),
+        ignoredUsernames = ignoredUsernames,
+        ignoredUrls = ignoredUrls,
       )
     val benefits =
-      extractSection(
-        lines = lines,
-        start = startsWithAny(_, BenefitsMarkers),
-        stripLabels = BenefitsMarkers,
+      sanitizeStructuredSection(
+        extractSection(
+          lines = lines,
+          start = startsWithAny(_, BenefitsMarkers),
+          stripLabels = BenefitsMarkers,
+        ),
+        ignoredUsernames = ignoredUsernames,
+        ignoredUrls = ignoredUrls,
       )
     val labeledAdditional =
       extractSection(
@@ -298,7 +326,7 @@ object XorazmIshSourceJobEtl extends SourceJobEtl {
     val contactSection =
       extractSection(
         lines = lines,
-        start = startsWithAny(_, ContactSectionMarkers),
+        start = line => startsWithAny(line, ContactSectionMarkers) || startsWithPhoneLabel(line),
         stripLabels = ContactSectionMarkers,
       )
 
@@ -331,6 +359,17 @@ object XorazmIshSourceJobEtl extends SourceJobEtl {
           contactSignalIndices,
     )
   }
+
+  private def sanitizeStructuredSection(
+      section: ExtractedSection,
+      ignoredUsernames: Set[String],
+      ignoredUrls: Set[String],
+    ): ExtractedSection =
+    ExtractedSection(
+      lines =
+        section.lines.filterNot(line => isLeakedContactContent(line, ignoredUsernames, ignoredUrls)),
+      consumedIndices = section.consumedIndices,
+    )
 
   private def extractSection(
       lines: Vector[String],
@@ -447,7 +486,7 @@ object XorazmIshSourceJobEtl extends SourceJobEtl {
   }
 
   private def isSectionBoundary(line: String): Boolean =
-    startsWithAny(line, SectionMarkers)
+    startsWithAny(line, SectionMarkers) || startsWithPhoneLabel(line)
 
   private def isMetadataLine(line: String): Boolean =
     startsWithAny(line, MetadataMarkers)
@@ -471,6 +510,25 @@ object XorazmIshSourceJobEtl extends SourceJobEtl {
     key.contains("rezumelaringizni") ||
     key.contains("резюменгизни") ||
     key.contains("резумеларингизни")
+  }
+
+  private def isLeakedContactContent(
+      line: String,
+      ignoredUsernames: Set[String],
+      ignoredUrls: Set[String],
+    ): Boolean = {
+    val key = normalized(line)
+
+    startsWithAny(line, ContactSectionMarkers) ||
+    startsWithPhoneLabel(line) ||
+    isStandaloneContactInstruction(line) ||
+    containsPhoneNumber(line) ||
+    containsTelegramUsername(line, ignoredUsernames) ||
+    containsNonSourceUrl(line, ignoredUsernames, ignoredUrls) ||
+    key == "telefon raqam" ||
+    key == "telefon raqami" ||
+    key == "телефон рақам" ||
+    key == "телефон рақами"
   }
 
   private def containsPhoneNumber(line: String): Boolean =
@@ -520,7 +578,7 @@ object XorazmIshSourceJobEtl extends SourceJobEtl {
       VisibleUrlPattern.replaceAllIn(withoutUsernames, " ")
 
     val withoutLabels =
-      stripLabelsFromLine(withoutUrls, ContactSectionMarkers)
+      stripLabelsFromLine(withoutUrls, ContactSectionMarkers ++ PhoneLabelMarkers)
 
     normalizeWhitespace(
       stripDecorations(withoutLabels)
@@ -567,13 +625,18 @@ object XorazmIshSourceJobEtl extends SourceJobEtl {
     normalizeWhitespace(stripDecorations(stripBullet(line)))
 
   private def stripLabelsFromLine(line: String, labels: List[String]): String =
-    labels.foldLeft(stripJoiners(line)) { case (current, label) =>
-      LeadingDecorationPattern
-        .replaceFirstIn(current, "")
-        .replaceFirst(
-          s"(?iu)^\\Q$label\\E\\s*[:\\-–]?\\s*",
+    labels.sortBy(-_.length).foldLeft(stripJoiners(line)) { case (current, label) =>
+      val trimmed = LeadingDecorationPattern.replaceFirstIn(current, "")
+      val canStrip =
+        if (PhoneLabelMarkers.contains(label)) startsWithPhoneLabel(trimmed)
+        else startsWithAny(trimmed, List(label))
+
+      if (canStrip)
+        trimmed.replaceFirst(
+          s"(?iu)^\\Q$label\\E(?:\\s*[:\\-–]\\s*|\\s+)?",
           "",
         )
+      else trimmed
     }
 
   private def stripBenefitBullet(line: String): String =
@@ -655,7 +718,12 @@ object XorazmIshSourceJobEtl extends SourceJobEtl {
 
   private def startsWithAny(line: String, markers: List[String]): Boolean = {
     val key = normalized(line)
-    markers.exists(marker => key.startsWith(marker))
+    markers.sortBy(-_.length).exists { marker =>
+      key.startsWith(marker) && {
+        val rest = key.drop(marker.length)
+        rest.isEmpty || rest.startsWith(" ") || rest.startsWith(":") || rest.startsWith("-") || rest.startsWith("–")
+      }
+    }
   }
 
   private def normalizeLines(text: String): List[String] =
@@ -694,6 +762,18 @@ object XorazmIshSourceJobEtl extends SourceJobEtl {
 
   private def normalizeWhitespace(line: String): String =
     line.replaceAll("""\s+""", " ").trim
+
+  private def startsWithPhoneLabel(line: String): Boolean = {
+    val key = normalized(line)
+
+    PhoneLabelMarkers.exists { marker =>
+      key == marker ||
+      key.startsWith(s"$marker:") ||
+      key.startsWith(s"$marker -") ||
+      key.startsWith(s"$marker –") ||
+      key.matches(s"""^\\Q$marker\\E\\s*[+\\d(].*$$""")
+    }
+  }
 
   private def compact(lines: List[String]): Option[String] =
     lines match {

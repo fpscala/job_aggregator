@@ -12,7 +12,7 @@ import uz.scala.domain.enums.InsertResult
 import uz.scala.domain.events.RawJob
 import uz.scala.domain.jobs.Job
 import uz.scala.effects.Calendar
-import uz.scala.etl.SourceJobEtls
+import uz.scala.etl.StructuredPostParser
 import uz.scala.repos.dto
 import uz.scala.repos.JobChannelPostRepository
 import uz.scala.effects.GenUUID
@@ -40,17 +40,33 @@ object JobsAlgebra {
     ): JobsAlgebra[F] =
     new JobsAlgebra[F] {
       override def ingest(rawJob: RawJob): F[InsertResult] = {
-        val details = SourceJobEtls.enrich(rawJob)
+        StructuredPostParser.parse(rawJob) match {
+          case Left(rejected) =>
+            Logger[F].info(
+              s"Rejected raw job source=${rawJob.source} url=${rawJob.url} reason=${rejected.reason.code}"
+            ) *>
+              MonadCancelThrow[F].pure(InsertResult.Invalid)
 
-        if (details.hasContacts)
-          for {
-            id <- GenUUID[F].make
-            createdAt <- Calendar[F].currentZonedDateTime
-            inserted <- repository
-              .insert(dto.Job.fromEvent(rawJob, id, createdAt, details))
-              .transact(xa)
-          } yield if (inserted) InsertResult.Inserted else InsertResult.Duplicate
-        else MonadCancelThrow[F].pure(InsertResult.Invalid)
+          case Right(parsed) =>
+            for {
+              id <- GenUUID[F].make
+              createdAt <- Calendar[F].currentZonedDateTime
+              inserted <- repository
+                .insert(
+                  dto.Job.fromEvent(
+                    input = rawJob,
+                    id = id,
+                    createdAt = createdAt,
+                    details = parsed.details,
+                    titleOverride = Some(parsed.title),
+                    companyOverride = Some(parsed.company),
+                    salaryOverride = parsed.salary,
+                    locationOverride = parsed.location,
+                  )
+                )
+                .transact(xa)
+            } yield if (inserted) InsertResult.Inserted else InsertResult.Duplicate
+        }
       }
 
       override def findById(id: UUID): F[Option[Job]] =
