@@ -60,6 +60,12 @@ object StructuredPostParser {
   }
 
   private object LabelKind {
+    case object Title extends LabelKind {
+      override val key: String = "title"
+      override val countsAsStructured: Boolean = false
+      override val countsAsOptional: Boolean = false
+    }
+
     case object Company extends LabelKind {
       override val key: String = "company"
       override val countsAsStructured: Boolean = true
@@ -73,6 +79,18 @@ object StructuredPostParser {
     }
 
     case object Address extends LabelKind {
+      override val key: String = "address"
+      override val countsAsStructured: Boolean = true
+      override val countsAsOptional: Boolean = true
+    }
+
+    case object Region extends LabelKind {
+      override val key: String = "address"
+      override val countsAsStructured: Boolean = true
+      override val countsAsOptional: Boolean = true
+    }
+
+    case object Landmark extends LabelKind {
       override val key: String = "address"
       override val countsAsStructured: Boolean = true
       override val countsAsOptional: Boolean = true
@@ -151,12 +169,25 @@ object StructuredPostParser {
       lines: List[String],
     )
 
+  private final case class IntroPattern(
+      pattern: Regex,
+      companyBuilder: Regex.Match => String,
+      titleGroup: Option[Int],
+    )
+
   private val LabelAliases: List[LabelAlias] =
     List(
+      LabelAlias(LabelKind.Title, "ish lavozimi"),
+      LabelAlias(LabelKind.Title, "lavozim"),
+      LabelAlias(LabelKind.Title, "vakansiya"),
       LabelAlias(LabelKind.Company, "kompaniya"),
       LabelAlias(LabelKind.Company, "korxona"),
+      LabelAlias(LabelKind.Company, "ish beruvchi"),
+      LabelAlias(LabelKind.Company, "ish joyi"),
       LabelAlias(LabelKind.Company, "компания"),
       LabelAlias(LabelKind.Company, "корхона"),
+      LabelAlias(LabelKind.Salary, "oylik maosh"),
+      LabelAlias(LabelKind.Salary, "ish haqi va motivatsiya"),
       LabelAlias(LabelKind.Salary, "maosh"),
       LabelAlias(LabelKind.Salary, "oylik"),
       LabelAlias(LabelKind.Salary, "ish haqi"),
@@ -166,33 +197,48 @@ object StructuredPostParser {
       LabelAlias(LabelKind.Salary, "зарплата"),
       LabelAlias(LabelKind.Address, "manzil"),
       LabelAlias(LabelKind.Address, "adres"),
+      LabelAlias(LabelKind.Region, "hudud"),
+      LabelAlias(LabelKind.Landmark, "mo'ljal"),
+      LabelAlias(LabelKind.Landmark, "mo‘ljal"),
       LabelAlias(LabelKind.Address, "манзил"),
       LabelAlias(LabelKind.Address, "адрес"),
       LabelAlias(LabelKind.WorkTime, "ish vaqti"),
+      LabelAlias(LabelKind.WorkTime, "ish vakti"),
       LabelAlias(LabelKind.WorkTime, "ish tartibi"),
       LabelAlias(LabelKind.WorkTime, "ish grafigi"),
+      LabelAlias(LabelKind.WorkTime, "ish kuni"),
       LabelAlias(LabelKind.WorkTime, "иш вақти"),
       LabelAlias(LabelKind.WorkTime, "иш тартиби"),
       LabelAlias(LabelKind.WorkTime, "иш графиги"),
       LabelAlias(LabelKind.Requirements, "talablar"),
+      LabelAlias(LabelKind.Requirements, "talab qilinadi"),
+      LabelAlias(LabelKind.Requirements, "asosiy talablar"),
       LabelAlias(LabelKind.Requirements, "umumiy talablar"),
+      LabelAlias(LabelKind.Requirements, "yosh"),
+      LabelAlias(LabelKind.Requirements, "yoshi"),
+      LabelAlias(LabelKind.Requirements, "jinsi"),
+      LabelAlias(LabelKind.Requirements, "tajriba"),
+      LabelAlias(LabelKind.Requirements, "shaxsiy fazilatlar"),
       LabelAlias(LabelKind.Requirements, "талаблар"),
       LabelAlias(LabelKind.Requirements, "умумий талаблар"),
       LabelAlias(LabelKind.Requirements, "требования"),
       LabelAlias(LabelKind.Benefits, "qulayliklar"),
       LabelAlias(LabelKind.Benefits, "sharoitlar"),
+      LabelAlias(LabelKind.Benefits, "ish sharoitlari"),
       LabelAlias(LabelKind.Benefits, "biz taklif qilamiz"),
       LabelAlias(LabelKind.Benefits, "қулайликлар"),
       LabelAlias(LabelKind.Benefits, "шароитлар"),
       LabelAlias(LabelKind.Benefits, "биз таклиф қиламиз"),
       LabelAlias(LabelKind.Benefits, "мы предлагаем"),
       LabelAlias(LabelKind.Phone, "telefon raqami"),
+      LabelAlias(LabelKind.Phone, "telefon raqam"),
       LabelAlias(LabelKind.Phone, "telefon"),
       LabelAlias(LabelKind.Phone, "tel"),
       LabelAlias(LabelKind.Phone, "телефон рақами"),
       LabelAlias(LabelKind.Phone, "телефон"),
       LabelAlias(LabelKind.Phone, "тел"),
       LabelAlias(LabelKind.Application, "murojaat uchun"),
+      LabelAlias(LabelKind.Application, "murojat uchun"),
       LabelAlias(LabelKind.Application, "murojaat"),
       LabelAlias(LabelKind.Application, "aloqa uchun"),
       LabelAlias(LabelKind.Application, "aloqa"),
@@ -200,6 +246,7 @@ object StructuredPostParser {
       LabelAlias(LabelKind.Application, "bog'lanish"),
       LabelAlias(LabelKind.Application, "boglanish"),
       LabelAlias(LabelKind.Application, "ariza topshirish"),
+      LabelAlias(LabelKind.Application, "telegram"),
       LabelAlias(LabelKind.Application, "боғланиш учун"),
       LabelAlias(LabelKind.Application, "мурожаат учун"),
       LabelAlias(LabelKind.Application, "мурожаат"),
@@ -207,7 +254,10 @@ object StructuredPostParser {
       LabelAlias(LabelKind.Application, "алоқа"),
       LabelAlias(LabelKind.Application, "боғланиш"),
       LabelAlias(LabelKind.Application, "ариза топшириш"),
+      LabelAlias(LabelKind.Responsibilities, "majburiyatlar"),
+      LabelAlias(LabelKind.Responsibilities, "asosiy vazifalar"),
       LabelAlias(LabelKind.Responsibilities, "vazifalar"),
+      LabelAlias(LabelKind.Responsibilities, "vazifalari"),
       LabelAlias(LabelKind.Responsibilities, "vazifasi"),
       LabelAlias(LabelKind.Responsibilities, "вазифалар"),
       LabelAlias(LabelKind.Responsibilities, "вазифаси"),
@@ -238,7 +288,7 @@ object StructuredPostParser {
     """[\s\p{So}•▪◦●✔✅❗👤👉➤▶✓🔥💼🏢📍💰📞📋⏰📨📌📱✨🧾]+$""".r
 
   private val BulletPrefixPattern: Regex =
-    """^\s*(?:[-–—•*▪◦●✔✅☑➤▶✓📌📍📞📋📨📱✨]+|\d+[.)])\s*""".r
+    """^\s*(?:[-–—•*▪◦●✔✅☑➤▶✓📌📍📞📋📨📱✨]+|\d+[.)]\s+)\s*""".r
 
   private val SeparatorLinePattern: Regex =
     """^\s*[-=_~]{3,}\s*$""".r
@@ -248,6 +298,103 @@ object StructuredPostParser {
 
   private val MultiRoleSeparators =
     List("/", ";", ",", " va ", " hamda ", " yoki ", " & ")
+
+  private val IntroMarkers =
+    List(
+      "ishga taklif",
+      "ishga qabul",
+      "ishga taflik",
+      "taklif qilinadi",
+      "taklif etadi",
+      "taklif etamiz",
+      "taklif qilamiz",
+      "quyidagi lavozim",
+      "quyidagi ish",
+      "jamoasiga",
+      "jamoamizga",
+      "kengayotganligi munosabati bilan",
+    )
+
+  private val MultiRoleHeaderMarkers =
+    List(
+      "ish lavozimlari",
+      "lavozimlar",
+      "kerakli hodimlar",
+      "kerakli xodimlar",
+      "biz kimni qidirmoqdamiz",
+      "biz kimni izlayapmiz",
+    )
+
+  private val IntroCompanySuffixes =
+    Map(
+      "firmasiga" -> "firmasi",
+      "firmaga" -> "firma",
+      "korxonasiga" -> "korxonasi",
+      "korxonaga" -> "korxona",
+      "kompaniyasiga" -> "kompaniyasi",
+      "kompaniyaga" -> "kompaniya",
+      "jamoasiga" -> "jamoasi",
+      "do'koniga" -> "do'koni",
+      "do'konga" -> "do'kon",
+      "dokoniga" -> "do'koni",
+      "restoraniga" -> "restorani",
+      "restoranga" -> "restoran",
+      "markaziga" -> "markazi",
+      "markazga" -> "markaz",
+      "klinikasiga" -> "klinikasi",
+      "klinikaga" -> "klinika",
+      "bog'chasiga" -> "bog'chasi",
+      "bog'chaga" -> "bog'cha",
+      "kafega" -> "kafe",
+      "cafega" -> "cafe",
+      "filialiga" -> "filiali",
+      "filiallariga" -> "filiallari",
+      "muassasasiga" -> "muassasasi",
+      "tashkilotiga" -> "tashkiloti",
+      "mchjga" -> "MCHJ",
+      "ofisiga" -> "ofisi",
+    )
+
+  private val IntroActionPattern =
+    """(?:ishga\s+taklif\s+qilinadi|ishga\s+qabul\s+qilinadi|tanlov\s+asosida\s+ishga\s+qabul\s+qilinadi|ishga\s+taklif\s+etadi|taklif\s+etadi)""".stripMargin
+
+  private val InlineTitleIntroPrefixes =
+    List(
+      "quyidagi lavozimga",
+      "quyidagi lavozimlarga",
+      "quyidagi ishchilar",
+      "quyidagi sohalar bo'yicha",
+      "quyidagi lavozimlar bo'yicha",
+      "bo'sh ish o'rinlarini",
+    )
+
+  private val IntroPatterns: List[IntroPattern] =
+    List(
+      IntroPattern(
+        pattern =
+          s"""(?iu)^(.+?)\\s+(jamoasi|jamoasiga)\\s+kengayotganligi\\s+munosabati\\s+bilan\\s+(.+?)\\s+$IntroActionPattern[\\s:.-]*$$""".r,
+        companyBuilder = matched => composeIntroCompany(matched.group(1), "jamoasiga"),
+        titleGroup = Some(3),
+      ),
+      IntroPattern(
+        pattern =
+          s"""(?iu)^(.+?)\\s+(jamoasiga)\\s+(.+?)\\s+$IntroActionPattern[\\s:.-]*$$""".r,
+        companyBuilder = matched => composeIntroCompany(matched.group(1), matched.group(2)),
+        titleGroup = Some(3),
+      ),
+      IntroPattern(
+        pattern =
+          s"""(?iu)^(.+?)\\s+(firmasiga|firmaga|korxonasiga|korxonaga|kompaniyasiga|kompaniyaga|do'koniga|do'konga|dokoniga|restoraniga|restoranga|markaziga|markazga|klinikasiga|klinikaga|bog'chasiga|bog'chaga|kafega|cafega|filialiga|filiallariga|muassasasiga|tashkilotiga|mchjga|ofisiga)\\s+(.+?)\\s+$IntroActionPattern[\\s:.-]*$$""".r,
+        companyBuilder = matched => composeIntroCompany(matched.group(1), matched.group(2)),
+        titleGroup = Some(3),
+      ),
+      IntroPattern(
+        pattern =
+          """(?iu)^(.+?)\s+sizga\s+bo'sh\s+ish\s+o'rinlarini\s+taklif\s+etadi[\s:.-]*$""".r,
+        companyBuilder = matched => stripWrappedQuotes(cleanTitle(matched.group(1))),
+        titleGroup = None,
+      ),
+    )
 
   def parse(rawJob: RawJob): Either[Rejected, Parsed] = {
     val ignoredUsernames = ignoredTelegramUsernames(rawJob)
@@ -272,83 +419,78 @@ object StructuredPostParser {
       if (structuredLabelCount < 3)
         Left(Rejected(RejectionReason.MissingStructuredLabels))
       else {
-        val firstLabelIndex = labeledLines.map(_._1).min
-        val headerLines = trimmedLines.take(firstLabelIndex).filterNot(isIgnorableLine(_, ignoredUsernames, rawJob.url))
+        val firstNonTitleLabelIndex =
+          labeledLines
+            .collectFirst { case (index, detected) if detected.kind != LabelKind.Title => index }
+            .getOrElse(trimmedLines.length)
+        val headerLines = trimmedLines.take(firstNonTitleLabelIndex)
+        val fallbackCompany = extractCompanyFromHeader(headerLines, ignoredUsernames, rawJob.url)
 
-        if (headerLines.isEmpty)
-          Left(Rejected(RejectionReason.MissingTitle))
-        else if (headerLines.size > 1)
-          Left(Rejected(RejectionReason.NoisyHeader))
-        else {
-          val title = cleanTitle(headerLines.head)
+        extractTitle(trimmedLines, labeledLines, ignoredUsernames, rawJob.url).flatMap { title =>
+          val sections = buildSections(trimmedLines, labeledLines)
 
-          if (title.isEmpty)
-            Left(Rejected(RejectionReason.MissingTitle))
-          else if (looksLikeMultiRole(title))
-            Left(Rejected(RejectionReason.MultipleRolesDetected))
-          else {
-            val sections = buildSections(trimmedLines, labeledLines)
+          val company =
+            compactValue(sectionLines(sections, LabelKind.Company))
+              .map(stripWrappedQuotes)
+              .orElse(fallbackCompany)
+          val salary = compactValue(sectionLines(sections, LabelKind.Salary), separator = "; ")
+          val location = buildLocation(sections)
+          val workSchedule = multilineValue(sectionLines(sections, LabelKind.WorkTime))
+          val requirements = multilineValue(sectionLines(sections, LabelKind.Requirements))
+          val benefits = multilineValue(sectionLines(sections, LabelKind.Benefits))
+          val responsibilities = multilineValue(sectionLines(sections, LabelKind.Responsibilities))
+          val additional = multilineValue(sectionLines(sections, LabelKind.Additional))
 
-            val company = compactValue(sectionLines(sections, LabelKind.Company))
-            val salary = compactValue(sectionLines(sections, LabelKind.Salary))
-            val location = compactValue(sectionLines(sections, LabelKind.Address))
-            val workSchedule = multilineValue(sectionLines(sections, LabelKind.WorkTime))
-            val requirements = multilineValue(sectionLines(sections, LabelKind.Requirements))
-            val benefits = multilineValue(sectionLines(sections, LabelKind.Benefits))
-            val responsibilities = multilineValue(sectionLines(sections, LabelKind.Responsibilities))
-            val additional = multilineValue(sectionLines(sections, LabelKind.Additional))
+          val applicationLines = sectionLines(sections, LabelKind.Application)
+          val phoneLines = sectionLines(sections, LabelKind.Phone)
+          val contactSourceText = (applicationLines ++ phoneLines).mkString("\n")
+          val hasApplication = sections.exists(_.kind == LabelKind.Application)
+          val phoneNumbers = extractPhoneNumbers(contactSourceText)
+          val usernames = extractTelegramUsernames(contactSourceText, ignoredUsernames)
+          val visibleLinks =
+            extractVisibleLinks(
+              value = contactSourceText,
+              ignoredUsernames = ignoredUsernames,
+              messageUrl = rawJob.url,
+            )
+          val hiddenLinks =
+            if (hasApplication) rawJob.contactLinks.getOrElse(Nil)
+            else Nil
+          val contactLinks = distinctPreservingOrder(hiddenLinks ++ visibleLinks)
+          val applicationText =
+            sanitizeContactText(multilineValue(applicationLines), phoneNumbers, usernames, contactLinks)
 
-            val applicationLines = sectionLines(sections, LabelKind.Application)
-            val phoneLines = sectionLines(sections, LabelKind.Phone)
-            val contactSourceText = (applicationLines ++ phoneLines).mkString("\n")
-            val hasApplication = applicationLines.map(cleanContentLine).exists(_.nonEmpty)
-            val phoneNumbers = extractPhoneNumbers(contactSourceText)
-            val usernames = extractTelegramUsernames(contactSourceText, ignoredUsernames)
-            val visibleLinks =
-              extractVisibleLinks(
-                value = contactSourceText,
-                ignoredUsernames = ignoredUsernames,
-                messageUrl = rawJob.url,
+          val optionalFieldCount =
+            List(salary, location, workSchedule, requirements, benefits).count(_.nonEmpty) +
+              (if (hasApplication) 1 else 0)
+
+          if (company.isEmpty)
+            Left(Rejected(RejectionReason.MissingCompany))
+          else if (phoneNumbers.isEmpty)
+            Left(Rejected(RejectionReason.MissingPhone))
+          else if (optionalFieldCount < 2)
+            Left(Rejected(RejectionReason.TooFewOptionalFields))
+          else
+            Right(
+              Parsed(
+                title = title,
+                company = company.get,
+                salary = salary,
+                location = location,
+                details =
+                  JobDetails(
+                    requirements = requirements,
+                    responsibilities = responsibilities,
+                    benefits = benefits,
+                    additional = additional,
+                    workSchedule = workSchedule,
+                    contactText = applicationText,
+                    contactPhoneNumbers = phoneNumbers,
+                    contactTelegramUsernames = usernames,
+                    contactLinks = contactLinks,
+                  ),
               )
-            val hiddenLinks =
-              if (hasApplication) rawJob.contactLinks.getOrElse(Nil)
-              else Nil
-            val contactLinks = distinctPreservingOrder(hiddenLinks ++ visibleLinks)
-            val applicationText =
-              sanitizeContactText(multilineValue(applicationLines), phoneNumbers, usernames, contactLinks)
-
-            val optionalFieldCount =
-              List(salary, location, workSchedule, requirements, benefits).count(_.nonEmpty) +
-                (if (hasApplication) 1 else 0)
-
-            if (company.isEmpty)
-              Left(Rejected(RejectionReason.MissingCompany))
-            else if (phoneNumbers.isEmpty)
-              Left(Rejected(RejectionReason.MissingPhone))
-            else if (optionalFieldCount < 2)
-              Left(Rejected(RejectionReason.TooFewOptionalFields))
-            else
-              Right(
-                Parsed(
-                  title = title,
-                  company = company.get,
-                  salary = salary,
-                  location = location,
-                  details =
-                    JobDetails(
-                      requirements = requirements,
-                      responsibilities = responsibilities,
-                      benefits = benefits,
-                      additional = additional,
-                      workSchedule = workSchedule,
-                      contactText = applicationText,
-                      contactPhoneNumbers = phoneNumbers,
-                      contactTelegramUsernames = usernames,
-                      contactLinks = contactLinks,
-                    ),
-                )
-              )
-          }
+            )
         }
       }
     }
@@ -374,8 +516,8 @@ object StructuredPostParser {
   private def sectionLines(sections: List[Section], kind: LabelKind): List[String] =
     sections.collect { case Section(`kind`, lines) => lines }.flatten
 
-  private def compactValue(lines: List[String]): Option[String] =
-    Option(lines.map(cleanContentLine).filter(_.nonEmpty).mkString(" "))
+  private def compactValue(lines: List[String], separator: String = " "): Option[String] =
+    Option(lines.map(cleanContentLine).filter(_.nonEmpty).mkString(separator))
       .map(normalizeWhitespace)
       .filter(_.nonEmpty)
 
@@ -383,6 +525,109 @@ object StructuredPostParser {
     Option(lines.map(cleanContentLine).filter(_.nonEmpty).distinct.mkString("\n"))
       .map(normalizeMultiline)
       .filter(_.nonEmpty)
+
+  private def buildLocation(sections: List[Section]): Option[String] = {
+    val address = compactValue(sectionLines(sections, LabelKind.Address).filterNot(isLocationNoiseLine))
+    val region = compactValue(sectionLines(sections, LabelKind.Region).filterNot(isLocationNoiseLine))
+    val landmark = compactValue(sectionLines(sections, LabelKind.Landmark).filterNot(isLocationNoiseLine))
+    val base = address.orElse(region)
+
+    (base, landmark) match {
+      case (Some(value), Some(marker)) if !normalize(value).contains(normalize(marker)) =>
+        Some(s"$value ($marker)")
+      case (Some(value), _) =>
+        Some(value)
+      case (None, Some(marker)) =>
+        Some(marker)
+      case _ =>
+        None
+    }
+  }
+
+  private def extractTitle(
+      lines: Vector[String],
+      labeledLines: Vector[(Int, DetectedLabel)],
+      ignoredUsernames: Set[String],
+      messageUrl: String,
+    ): Either[Rejected, String] = {
+    val firstNonTitleLabelIndex =
+      labeledLines
+        .collectFirst { case (index, detected) if detected.kind != LabelKind.Title => index }
+        .getOrElse(lines.length)
+
+    val titleFromLabel =
+      labeledLines.collectFirst {
+        case (index, detected) if detected.kind == LabelKind.Title && index < firstNonTitleLabelIndex =>
+          val nextLabelIndex =
+            labeledLines.collectFirst { case (nextIndex, _) if nextIndex > index => nextIndex }
+              .getOrElse(lines.length)
+          compactValue(
+            Option(detected.inlineValue).filter(_.nonEmpty).toList ++
+              lines.slice(index + 1, nextLabelIndex).toList
+          )
+      }.flatten
+
+    titleFromLabel match {
+      case Some(value) => validateTitle(value)
+      case None =>
+        extractTitleFromHeader(
+          lines = lines.take(firstNonTitleLabelIndex),
+          ignoredUsernames = ignoredUsernames,
+          messageUrl = messageUrl,
+        ).flatMap(validateTitle)
+    }
+  }
+
+  private def extractTitleFromHeader(
+      lines: Vector[String],
+      ignoredUsernames: Set[String],
+      messageUrl: String,
+    ): Either[Rejected, String] = {
+    val headerLines =
+      lines
+        .filterNot(isIgnorableLine(_, ignoredUsernames, messageUrl))
+        .map(cleanTitle)
+        .filter(_.nonEmpty)
+
+    val introTitle =
+      headerLines
+        .flatMap(extractIntroFacts)
+        .flatMap(_.title.toList)
+        .headOption
+
+    val roleCandidates = headerLines.filterNot(looksLikeIntroLine)
+    val hasMultiRoleHeader = headerLines.exists(looksLikeMultiRoleHeader)
+
+    roleCandidates.distinct match {
+      case Vector(single) =>
+        Right(single)
+      case Vector() if introTitle.nonEmpty && !hasMultiRoleHeader =>
+        Right(introTitle.get)
+      case Vector() if headerLines.size == 1 && !looksLikeIntroLine(headerLines.head) =>
+        Right(headerLines.head)
+      case Vector() if hasMultiRoleHeader =>
+        Left(Rejected(RejectionReason.MultipleRolesDetected))
+      case Vector() =>
+        Left(Rejected(RejectionReason.MissingTitle))
+      case values if values.size > 1 =>
+        Left(Rejected(RejectionReason.MultipleRolesDetected))
+      case _ =>
+        Left(Rejected(RejectionReason.MissingTitle))
+    }
+  }
+
+  private def validateTitle(value: String): Either[Rejected, String] = {
+    val normalizedTitle = stripWrappedQuotes(cleanTitle(value))
+
+    if (normalizedTitle.isEmpty)
+      Left(Rejected(RejectionReason.MissingTitle))
+    else if (looksLikeIntroLine(normalizedTitle))
+      Left(Rejected(RejectionReason.MissingTitle))
+    else if (looksLikeMultiRoleHeader(normalizedTitle) || looksLikeMultiRole(normalizedTitle))
+      Left(Rejected(RejectionReason.MultipleRolesDetected))
+    else
+      Right(normalizedTitle)
+  }
 
   private def sanitizeContactText(
       value: Option[String],
@@ -415,6 +660,62 @@ object StructuredPostParser {
       case Nil => None
       case lines => Some(lines.mkString("\n"))
     }
+  }
+
+  private def extractCompanyFromHeader(
+      lines: Vector[String],
+      ignoredUsernames: Set[String],
+      messageUrl: String,
+    ): Option[String] =
+    lines
+      .filterNot(isIgnorableLine(_, ignoredUsernames, messageUrl))
+      .map(cleanTitle)
+      .flatMap(extractIntroFacts)
+      .flatMap(_.company.toList)
+      .headOption
+
+  private def extractIntroFacts(value: String): Option[IntroFacts] = {
+    val normalized = stripWrappedQuotes(cleanTitle(value))
+
+    IntroPatterns.view.flatMap { introPattern =>
+      introPattern.pattern.findFirstMatchIn(normalized).map { matched =>
+        val company = introPattern.companyBuilder(matched)
+        val title =
+          introPattern.titleGroup
+            .flatMap(groupIndex => Option(matched.group(groupIndex)))
+            .map(cleanTitle)
+            .map(stripWrappedQuotes)
+            .filterNot(isInlineTitleIntroPrefix)
+
+        IntroFacts(
+          company = Option(company).map(normalizeWhitespace).filter(_.nonEmpty),
+          title = title.filterNot(looksLikeMultiRoleHeader),
+        )
+      }
+    }.headOption
+  }
+
+  private final case class IntroFacts(
+      company: Option[String],
+      title: Option[String],
+    )
+
+  private def composeIntroCompany(prefix: String, suffix: String): String = {
+    val normalizedPrefix =
+      stripWrappedQuotes(cleanTitle(prefix))
+        .replaceAll("""[\"“”«»]+""", "")
+        .replaceAll("""(?iu)\bga\s*$""", "")
+        .trim
+    val normalizedSuffix =
+      IntroCompanySuffixes.getOrElse(suffix.toLowerCase(Locale.ROOT), suffix)
+
+    normalizeWhitespace(s"$normalizedPrefix $normalizedSuffix")
+  }
+
+  private def isInlineTitleIntroPrefix(value: String): Boolean = {
+    val normalized = normalizeWhitespace(value).toLowerCase(Locale.ROOT)
+
+    InlineTitleIntroPrefixes.exists(normalized.startsWith)
   }
 
   private def stripExtractedContacts(
@@ -522,11 +823,38 @@ object StructuredPostParser {
     MultiRoleSeparators.exists(normalized.contains)
   }
 
+  private def looksLikeIntroLine(value: String): Boolean = {
+    val normalized = normalizeWhitespace(value).toLowerCase(Locale.ROOT)
+
+    IntroMarkers.exists(normalized.contains) && normalized.split("\\s+").length >= 4
+  }
+
+  private def looksLikeMultiRoleHeader(value: String): Boolean = {
+    val normalized = normalizeWhitespace(value).toLowerCase(Locale.ROOT)
+
+    MultiRoleHeaderMarkers.exists(normalized.contains)
+  }
+
   private def cleanTitle(value: String): String =
     stripDecorations(value)
       .replaceAll("""(?iu)^lavozim\s*[:\-–—]\s*""", "")
       .replaceAll("""(?iu)^ish\s+lavozimi\s*[:\-–—]\s*""", "")
       .trim
+
+  private def stripWrappedQuotes(value: String): String =
+    value.trim.replaceAll("""^[\"'“”«»„‟]+|[\"'“”«»„‟]+$""", "").trim
+
+  private def isLocationNoiseLine(value: String): Boolean = {
+    val normalized = cleanContentLine(value).toLowerCase(Locale.ROOT)
+
+    normalized.isEmpty ||
+    normalized.contains("bog'laning") ||
+    normalized.contains("murojaat") ||
+    normalized.contains("aloqa") ||
+    normalized.contains("bog'lanish") ||
+    normalized.contains("telegram") ||
+    normalized.contains("tel")
+  }
 
   private def cleanContentLine(value: String): String =
     normalizeWhitespace(
@@ -600,6 +928,9 @@ object StructuredPostParser {
   private def phoneDigits(value: String): String =
     value.filter(_.isDigit)
 
+  private def normalize(value: String): String =
+    normalizeWhitespace(value).toLowerCase(Locale.ROOT)
+
   private def normalizeWhitespace(value: String): String =
     normalizeApostrophes(value)
       .replaceAll("""[ \t\r\f]+""", " ")
@@ -616,6 +947,8 @@ object StructuredPostParser {
     value
       .replace('\u00a0', ' ')
       .replace('\u200b', ' ')
+      .replace("\u200d", "")
+      .replace("\ufe0f", "")
       .replace('’', '\'')
       .replace('‘', '\'')
       .replace('ʻ', '\'')

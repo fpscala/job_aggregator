@@ -11,139 +11,212 @@ object StructuredPostParserTest extends SimpleIOSuite {
   private val postedAt =
     ZonedDateTime.of(2026, 3, 12, 10, 0, 0, 0, ZoneId.of("Asia/Tashkent"))
 
-  pureTest("parses ideal structured post") {
+  pureTest("parses real labeled structured post 26617") {
     val parsed =
       expectParsed(
         rawJob(
+          source = "Xorazm_ish_bor_elonlar",
+          url = "https://t.me/Xorazm_ish_bor_elonlar/26617",
           description =
-            """🔥 Ofitsiant
-              |🏢 Kompaniya: Burger House
-              |💰 Maosh: 3 000 000 so'm
-              |📍 Manzil: Urganch
-              |⏰ Ish vaqti: 09:00-18:00
+            """📣📣📣📣
+              |💼 Ish lavozimi: Kassir
+              |
+              |🏢 Ish joyi: “XON BOZOR”
+              |
+              |📍 Manzil: Urganch shahri, Xiva krug, “Xon Bozor” majmuasi
+              |
+              |👩‍💼 Talablar:
+              |• Faqat 18–25 yosh oralig‘idagi qizlar qabul qilinadi
+              |• Kompyuterda ishlash bo‘yicha boshlang‘ich ko‘nikmaga ega bo‘lishi kerak
+              |• Xushmuomala va mas’uliyatli bo‘lishi kerak
+              |• Hisob-kitobni bilishi zarur
+              |• Talabalar bezoda qilmasin
+              |
+              |⏰ Ish vaqti: 09:00 dan 23:00 gacha
+              |
+              |💰 Ish haqi: Suhbat asosida
+              |
+              |📞 Bog‘lanish uchun:
+              |📱 +998 97 666 44 22
+              |
+              |👉 @Xorazm_ish_bor_elonlar""".stripMargin
+        )
+      )
+
+    expect.same("Kassir", parsed.title) &&
+    expect.same("XON BOZOR", parsed.company) &&
+    expect.same(Some("Suhbat asosida"), parsed.salary) &&
+    expect.same(Some("Urganch shahri, Xiva krug, “Xon Bozor” majmuasi"), parsed.location) &&
+    expect.same(Some("09:00 dan 23:00 gacha"), parsed.details.workSchedule) &&
+    expect.same(List("+998976664422"), parsed.details.contactPhoneNumbers) &&
+    expect.same(Nil, parsed.details.contactTelegramUsernames)
+  }
+
+  pureTest("parses real labeled structured post 26598 with region and workday labels") {
+    val parsed =
+      expectParsed(
+        rawJob(
+          source = "Xorazm_ish_bor_elonlar",
+          url = "https://t.me/Xorazm_ish_bor_elonlar/26598",
+          description =
+            """📣📣📣📣
+              |💼 Ish lavozimi: Savdo xodimi
+              |
+              |🏢 Ish beruvchi: PORT Foods MChJ
+              |
+              |📍 Hudud: Turtkul, Beruniy, Boston, Ellikkala
+              |
+              |⏰ Ish vaqti: 09:00 dan 17:00 gacha
+              |🗓 Ish kuni: 7/6
+              |
+              |💰 Ish haqi: 6 000 000 – 10 000 000 so‘m
+              |
+              |📝 Talablar:
+              |• Erkak va ayol nomzodlar
+              |• Yosh: 18–35 yosh
+              |• Savdo sohasida ishlagan bo‘lishi shart
+              |• Shaxsiy avtomashina bo‘lsa — ustunlik
+              |
+              |📞 Bog‘lanish:
+              |📱 93 587 95 25
+              |
+              |👉 @Xorazm_ish_bor_elonlar""".stripMargin
+        )
+      )
+
+    expect.same("Savdo xodimi", parsed.title) &&
+    expect.same("PORT Foods MChJ", parsed.company) &&
+    expect.same(Some("Turtkul, Beruniy, Boston, Ellikkala"), parsed.location) &&
+    expect.same(Some("09:00 dan 17:00 gacha\n7/6"), parsed.details.workSchedule) &&
+    expect.same(Some("6 000 000 – 10 000 000 so'm"), parsed.salary) &&
+    expect.same(List("935879525"), parsed.details.contactPhoneNumbers)
+  }
+
+  pureTest("parses real original structured post 40610 with intro company and separate role line") {
+    val parsed =
+      expectParsed(
+        rawJob(
+          source = "Xorazm_ish",
+          url = "https://t.me/Xorazm_ish/40610",
+          description =
+            """#ish
+              |"Candy Gold" konditer firmasiga quyidagi lavozimga ishga taklif qilinadi.
+              |
+              |▪️Savdo agenti
               |Talablar:
-              |- Tajriba
-              |- Mas'uliyat
-              |📞 Telefon: +998 90 123 45 67
-              |📨 Murojaat:
-              |- Onlayn anketa
-              |@structured_channel""".stripMargin,
-          contactLinks = Some(List("https://forms.gle/apply")),
+              |• Yigit-qizlar
+              |• Kamida 6 oylik ish tajribasi bo'lishi
+              |• Shaxsiy avtomobiliga ega bo'lishi
+              |• Sotuv qobiliyatiga ega bo'lishi
+              |• Muammolarni hal qila olishi
+              |• Belgilangan hududda faol mijozlar bazasini yaratish
+              |• Mas'uliyatli va chaqqon bo'lishi kerak
+              |
+              |Oylik: 4.000.000 - 7.000.000 so'm (fiksa + KPI + bonus)
+              |
+              |Manzil: Urganch shahri, Xonqa ko'chasi
+              |Mo'ljal: Eco Metan
+              |
+              |❗️10:00 - 17:00 oralig'ida bog'laning
+              |Tel: +998919120201
+              |
+              |👉 @Xorazm_ish""".stripMargin
         )
       )
 
-    expect.same("Ofitsiant", parsed.title) &&
-    expect.same("Burger House", parsed.company) &&
-    expect.same(Some("3 000 000 so'm"), parsed.salary) &&
-    expect.same(Some("Urganch"), parsed.location) &&
-    expect.same(Some("09:00-18:00"), parsed.details.workSchedule) &&
-    expect.same(Some("Tajriba\nMas'uliyat"), parsed.details.requirements) &&
-    expect.same(Some("Onlayn anketa"), parsed.details.contactText) &&
-    expect.same(List("+998901234567"), parsed.details.contactPhoneNumbers) &&
-    expect.same(List("https://forms.gle/apply"), parsed.details.contactLinks)
+    expect.same("Savdo agenti", parsed.title) &&
+    expect.same("Candy Gold konditer firmasi", parsed.company) &&
+    expect.same(Some("4.000.000 - 7.000.000 so'm (fiksa + KPI + bonus)"), parsed.salary) &&
+    expect.same(Some("Urganch shahri, Xonqa ko'chasi (Eco Metan)"), parsed.location) &&
+    expect.same(None, parsed.details.workSchedule) &&
+    expect.same(List("+998919120201"), parsed.details.contactPhoneNumbers)
   }
 
-  pureTest("parses when label order changes") {
+  pureTest("parses real original structured post 40608 with inline title in intro line") {
     val parsed =
       expectParsed(
         rawJob(
+          source = "Xorazm_ish",
+          url = "https://t.me/Xorazm_ish/40608",
           description =
-            """Barista
-              |Telefon: 99890 555 44 33
+            """#ish
+              |"JASMIN Cake bakery" jamoasi kengayotganligi munosabati bilan qandolatchilar ishga taklif qilinadi.
+              |
               |Talablar:
-              |• Xushmuomala
-              |Kompaniya: Coffee Lab
-              |Manzil: Urganch""".stripMargin
+              |• 20 yoshdan katta bolishi
+              |• Shaxsiy fazilatlar: mas'uliyat, odoblilik, moslashuvchanlik
+              |• Yashash joyi Urganch shaharda bo'lsa yaxshi
+              |
+              |Ish vaqti: 09:00 - 19:00
+              |Oylik: (ishbay) 120.000 so'mdan boshlanadi
+              |
+              |Manzil: Urganch shahri
+              |Mo'ljal: Amina do'koni
+              |
+              |Tel: +998914316633
+              |
+              |👉 @Xorazm_ish""".stripMargin
         )
       )
 
-    expect.same("Barista", parsed.title) &&
-    expect.same("Coffee Lab", parsed.company) &&
-    expect.same(Some("Urganch"), parsed.location) &&
-    expect.same(Some("Xushmuomala"), parsed.details.requirements) &&
-    expect.same(List("+998905554433"), parsed.details.contactPhoneNumbers)
+    expect.same("qandolatchilar", parsed.title) &&
+    expect.same("JASMIN Cake bakery jamoasi", parsed.company) &&
+    expect.same(Some("(ishbay) 120.000 so'mdan boshlanadi"), parsed.salary) &&
+    expect.same(Some("Urganch shahri (Amina do'koni)"), parsed.location) &&
+    expect.same(Some("09:00 - 19:00"), parsed.details.workSchedule) &&
+    expect.same(List("+998914316633"), parsed.details.contactPhoneNumbers)
   }
 
-  pureTest("keeps multiline requirements") {
+  pureTest("parses normalized structured variant derived from real dataset pattern") {
     val parsed =
       expectParsed(
         rawJob(
+          source = "Xorazm_ish",
+          url = "https://t.me/Xorazm_ish/40421",
           description =
-            """Sotuvchi
-              |Kompaniya: Optovik
-              |Telefon:
-              |+998 91 111 22 33
-              |Maosh: 4 000 000 so'm
+            """Savdo xodimi
+              |Kompaniya: PORT Foods MChJ
+              |Maosh: 6 000 000 - 10 000 000 so'm
+              |Manzil: Turtkul, Beruniy, Boston, Ellikkala
+              |Ish vaqti:
+              |09:00 dan 17:00 gacha
+              |7/6
               |Talablar:
-              |- Savdo tajribasi
-              |- Rus tilini bilish
-              |- Dam olish kunlari ishlay olish
-              |Murojaat:
-              |- Rezyumeni yuboring""".stripMargin
+              |- Erkak va ayol nomzodlar
+              |- Yosh: 18-35 yosh
+              |- Savdo sohasida ishlagan bo'lishi shart
+              |- Shaxsiy avtomashina bo'lsa ustunlik
+              |Telefon: 93 587 95 25""".stripMargin
         )
       )
 
-    expect.same(
-      Some("Savdo tajribasi\nRus tilini bilish\nDam olish kunlari ishlay olish"),
-      parsed.details.requirements,
-    ) &&
-    expect.same(Some("Rezyumeni yuboring"), parsed.details.contactText)
+    expect.same("Savdo xodimi", parsed.title) &&
+    expect.same("PORT Foods MChJ", parsed.company) &&
+    expect.same(Some("6 000 000 - 10 000 000 so'm"), parsed.salary) &&
+    expect.same(Some("Turtkul, Beruniy, Boston, Ellikkala"), parsed.location) &&
+    expect.same(Some("09:00 dan 17:00 gacha\n7/6"), parsed.details.workSchedule) &&
+    expect.same(List("935879525"), parsed.details.contactPhoneNumbers)
   }
 
-  pureTest("accepts posts with only two optional fields present") {
+  pureTest("keeps requirements clean when Bog'lanish starts a new section") {
     val parsed =
       expectParsed(
         rawJob(
-          description =
-            """Kassir
-              |Kompaniya: Market
-              |Telefon: +998901112233
-              |Maosh: 3 500 000 so'm
-              |Ish vaqti: 2/2 smena""".stripMargin
-        )
-      )
-
-    expect.same(Some("3 500 000 so'm"), parsed.salary) &&
-    expect.same(Some("2/2 smena"), parsed.details.workSchedule) &&
-    expect.same(List("+998901112233"), parsed.details.contactPhoneNumbers)
-  }
-
-  pureTest("normalizes multiple phone formats") {
-    val parsed =
-      expectParsed(
-        rawJob(
+          source = "Xorazm_ish_bor_elonlar",
+          url = "https://t.me/Xorazm_ish_bor_elonlar/26599",
           description =
             """Operator
-              |Kompaniya: Call Center
-              |Telefon:
-              |+998 (90) 123-45-67
-              |99891 222 33 44
-              |90 765 43 21
+              |Kompaniya: Test Call Center
+              |Talablar:
+              |- Xushmuomala
+              |- Mas'uliyatli
+              |Bog‘lanish:
+              |+998 90 123 45 67
+              |@test_hr
               |Manzil: Urganch
               |Ish vaqti: 09:00-18:00""".stripMargin
         )
       )
-
-    expect.same(
-      List("+998901234567", "+998912223344", "907654321"),
-      parsed.details.contactPhoneNumbers,
-    )
-  }
-
-  pureTest("starts a new contact section at Bog'lanish and keeps requirements clean") {
-    val originalPost =
-      """Operator
-        |Kompaniya: Test Call Center
-        |Talablar:
-        |- Xushmuomala
-        |- Mas'uliyatli
-        |Bog‘lanish:
-        |+998 90 123 45 67
-        |@test_hr
-        |Manzil: Urganch
-        |Ish vaqti: 09:00-18:00""".stripMargin
-
-    val parsed = expectParsed(rawJob(description = originalPost))
 
     expect.same(Some("Xushmuomala\nMas'uliyatli"), parsed.details.requirements) &&
     expect.same(List("+998901234567"), parsed.details.contactPhoneNumbers) &&
@@ -151,62 +224,113 @@ object StructuredPostParserTest extends SimpleIOSuite {
     expect.same(None, parsed.details.contactText)
   }
 
-  pureTest("rejects non structured posts") {
+  pureTest("rejects real multi-role structured post 40421") {
     val rejected =
       expectRejected(
         rawJob(
+          source = "Xorazm_ish",
+          url = "https://t.me/Xorazm_ish/40602",
           description =
-            """Burger House jamoasiga ofitsiant kerak.
-              |Ish tajribasi bo'lsa yaxshi.
-              |Bog'lanish uchun +998901234567""".stripMargin
-        )
-      )
-
-    expect.same(StructuredPostParser.RejectionReason.MissingStructuredLabels, rejected.reason)
-  }
-
-  pureTest("rejects multi role titles") {
-    val rejected =
-      expectRejected(
-        rawJob(
-          description =
-            """Ofitsiant / Kassir
-              |Kompaniya: Burger House
-              |Telefon: +998901234567
-              |Manzil: Urganch
-              |Ish vaqti: 09:00-18:00""".stripMargin
+            """#ish
+              |"JASMIN Cake bakery" jamoasi kengayotganligi munosabati bilan quyidagi lavozimlarga ishga taklif qilinadi.
+              |
+              |▪️Savdo agenti
+              |▪️Yuk tashuvchi (доставщик)
+              |
+              |Talablar:
+              |• Yigit-qizlar
+              |• 20-35 yosh
+              |
+              |Vazifalar:
+              |• Belgilangan hududda joylashgan do'konlarga muntazam tashriflar.
+              |
+              |Oylik: 8.000.000 - 10.000.000 so'm (savdo agenti)
+              |5.000.000 - 6.000.000 so'm (доставщик)
+              |
+              |Manzil: Urganch shahri
+              |Mo'ljal: Amina do'koni
+              |
+              |Tel: +998912767070
+              |
+              |👉 @Xorazm_ish""".stripMargin
         )
       )
 
     expect.same(StructuredPostParser.RejectionReason.MultipleRolesDetected, rejected.reason)
   }
 
-  pureTest("rejects posts without company") {
+  pureTest("rejects real structured-like post 26599 without company") {
     val rejected =
       expectRejected(
         rawJob(
           description =
-            """Ofitsiant
-              |Telefon: +998901234567
-              |Maosh: 3 000 000 so'm
-              |Manzil: Urganch""".stripMargin
+            """📣📣📣📣
+              |💼 Ish lavozimi: Sotuvchi-Operator (Call center)
+              |
+              |• Talab qilinadi: qizlar
+              |• Yosh: 20-30
+              |
+              |⏰ Ish vaqti: 14:00-22:00
+              |
+              |💰 Oylik maosh: 4 500 000 so‘m
+              |
+              |📝 Talablar:
+              |• Doimiy ishchi kerak
+              |• Muloqotga usta bo‘lishi
+              |• Nutqi ravon, adabiy tilda to‘g‘ri gapira olishi
+              |• Xushmuomala va mas’uliyatli bo‘lishi
+              |• Kompyuterni bilishi
+              |• Telefonda ilovalar bilan ishlashni tushunishi
+              |
+              |🍴 Sharoitlar:
+              |• Bepul tushlik
+              |• Qulay ish muhiti
+              |
+              |📍 Manzil: Urganch shahar
+              |📞 Aloqa: +998 93 748 00 88
+              |
+              |👉 @Xorazm_ish_bor_elonlar""".stripMargin
         )
       )
 
     expect.same(StructuredPostParser.RejectionReason.MissingCompany, rejected.reason)
   }
 
-  pureTest("rejects posts without phone") {
+  pureTest("rejects real structured-like post 40602 without phone") {
     val rejected =
       expectRejected(
         rawJob(
           description =
-            """Ofitsiant
-              |Kompaniya: Burger House
-              |Maosh: 3 000 000 so'm
-              |Manzil: Urganch
+            """#ish
+              |Stomatologiya klinikasiga reseption (adminstrator) ishga taklif qilinadi.
+              |
               |Talablar:
-              |- Tajriba""".stripMargin
+              |• Faqat qizlar
+              |• Ma'lumoti Oliy (yo'nalish ahamiyatga ega emas, lekin madaniyat va savodxonlik darajasi yuqori bo'lishi shart)
+              |• Kompyuter (word, Excel) da ishlay olishi
+              |• Sun'iy intelekt bilan ishlay olishi
+              |• Mijozlar bilan muloqot qobiliyati bo'lishi
+              |• Punktual va jamoa bilan ishlay olishi
+              |• Xushmuomala va kirishimli bo'lishi kerak
+              |
+              |Vazifalar:
+              |• Bemorlarni kutib olish va ro'yxatga olish
+              |• Telefon qo'ng'iroqlariga javob berish va qabul vaqtlarini belgilash
+              |• Klinika xizmatlari haqida ma'lumot berish
+              |• Hujjatlar bilan ishlash
+              |
+              |Ish vaqti va oylik suhbat asosida kelishiladi
+              |✓ Ahil jamoa
+              |✓ Zamonaviy va shinam ofis
+              |✓ Raqobatbardosh ish haqi
+              |✓ Kasbiy rivojlanish imkoniyati
+              |
+              |Manzil: Urganch shahri
+              |
+              |Murojaat uchun:
+              |👤 @FDC_HRBOT
+              |
+              |👉 @Xorazm_ish""".stripMargin
         )
       )
 
@@ -216,6 +340,8 @@ object StructuredPostParserTest extends SimpleIOSuite {
   private def rawJob(
       description: String,
       contactLinks: Option[List[String]] = None,
+      source: String = "structured_channel",
+      url: String = "https://t.me/structured_channel/42",
     ): RawJob =
     RawJob(
       title = "placeholder",
@@ -223,8 +349,8 @@ object StructuredPostParserTest extends SimpleIOSuite {
       description = description,
       salary = None,
       location = None,
-      source = "structured_channel",
-      url = "https://t.me/structured_channel/42",
+      source = source,
+      url = url,
       postedAt = postedAt,
       contactLinks = contactLinks,
     )
