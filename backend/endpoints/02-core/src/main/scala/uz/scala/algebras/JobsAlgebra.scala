@@ -12,6 +12,7 @@ import uz.scala.domain.enums.InsertResult
 import uz.scala.domain.events.RawJob
 import uz.scala.domain.jobs.Job
 import uz.scala.effects.Calendar
+import uz.scala.etl.SemiStructuredPostParser
 import uz.scala.etl.StructuredPostParser
 import uz.scala.repos.dto
 import uz.scala.repos.JobChannelPostRepository
@@ -40,7 +41,13 @@ object JobsAlgebra {
     ): JobsAlgebra[F] =
     new JobsAlgebra[F] {
       override def ingest(rawJob: RawJob): F[InsertResult] = {
-        StructuredPostParser.parse(rawJob) match {
+        val parsedResult =
+          StructuredPostParser.parse(rawJob) match {
+            case right @ Right(_) => right
+            case Left(_)          => SemiStructuredPostParser.parse(rawJob)
+          }
+
+        parsedResult match {
           case Left(rejected) =>
             Logger[F].info(
               s"Rejected raw job source=${rawJob.source} url=${rawJob.url} reason=${rejected.reason.code}"

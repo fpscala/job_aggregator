@@ -48,6 +48,10 @@ object StructuredPostParser {
       override val code: String = "missing_phone"
     }
 
+    case object MissingContact extends RejectionReason {
+      override val code: String = "missing_contact"
+    }
+
     case object TooFewOptionalFields extends RejectionReason {
       override val code: String = "too_few_optional_fields"
     }

@@ -18,6 +18,10 @@ object XorazmIshSourceJobEtl extends SourceJobEtl {
   private val RequirementsMarkers =
     List(
       "talablar",
+      "talab etiladi",
+      "nomzodga talablar",
+      "biz kimni qidirmoqdamiz",
+      "biz kimni izlayapmiz",
       "umumiy talablar",
       "требования",
       "общие требования",
@@ -27,8 +31,10 @@ object XorazmIshSourceJobEtl extends SourceJobEtl {
 
   private val ResponsibilitiesMarkers =
     List(
+      "majburiyatlar",
       "vazifasi",
       "vazifalar",
+      "lavozim majburiyatlari",
       "asosiy vazifalar",
       "обязанности",
       "вазифаси",
@@ -38,6 +44,8 @@ object XorazmIshSourceJobEtl extends SourceJobEtl {
 
   private val BenefitsMarkers =
     List(
+      "imkoniyatlar",
+      "bizdan taklif",
       "sharoitlar",
       "sharoit",
       "shart-sharoitlar",
