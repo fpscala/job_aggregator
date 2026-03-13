@@ -40,11 +40,20 @@ object JobsAlgebra {
       xa: Transactor[F]
     ): JobsAlgebra[F] =
     new JobsAlgebra[F] {
+      private final case class ParsedCandidate(
+          rawJob: RawJob,
+          parsed: StructuredPostParser.Parsed,
+        )
+
       override def ingest(rawJob: RawJob): F[InsertResult] = {
         val parsedResult =
           StructuredPostParser.parse(rawJob) match {
-            case right @ Right(_) => right
-            case Left(_)          => SemiStructuredPostParser.parse(rawJob)
+            case Right(parsed) =>
+              Right(List(ParsedCandidate(rawJob, parsed)))
+            case Left(_) =>
+              SemiStructuredPostParser
+                .parseMany(rawJob)
+                .map(_.map(candidate => ParsedCandidate(candidate.rawJob, candidate.parsed)))
           }
 
         parsedResult match {
@@ -54,25 +63,28 @@ object JobsAlgebra {
             ) *>
               MonadCancelThrow[F].pure(InsertResult.Invalid)
 
-          case Right(parsed) =>
+          case Right(parsedCandidates) =>
             for {
-              id <- GenUUID[F].make
               createdAt <- Calendar[F].currentZonedDateTime
-              inserted <- repository
-                .insert(
-                  dto.Job.fromEvent(
-                    input = rawJob,
-                    id = id,
-                    createdAt = createdAt,
-                    details = parsed.details,
-                    titleOverride = Some(parsed.title),
-                    companyOverride = Some(parsed.company),
-                    salaryOverride = parsed.salary,
-                    locationOverride = parsed.location,
+              ids <- parsedCandidates.traverse(_ => GenUUID[F].make)
+              inserted <- parsedCandidates
+                .zip(ids)
+                .traverse { case (candidate, id) =>
+                  repository.insert(
+                    dto.Job.fromEvent(
+                      input = candidate.rawJob,
+                      id = id,
+                      createdAt = createdAt,
+                      details = candidate.parsed.details,
+                      titleOverride = Some(candidate.parsed.title),
+                      companyOverride = Some(candidate.parsed.company),
+                      salaryOverride = candidate.parsed.salary,
+                      locationOverride = candidate.parsed.location,
+                    )
                   )
-                )
+                }
                 .transact(xa)
-            } yield if (inserted) InsertResult.Inserted else InsertResult.Duplicate
+            } yield if (inserted.exists(identity)) InsertResult.Inserted else InsertResult.Duplicate
         }
       }
 

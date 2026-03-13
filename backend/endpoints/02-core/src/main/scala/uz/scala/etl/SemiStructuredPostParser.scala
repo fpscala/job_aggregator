@@ -11,6 +11,11 @@ object SemiStructuredPostParser {
   import StructuredPostParser.{Parsed, Rejected}
   import StructuredPostParser.RejectionReason
 
+  final case class ParsedCandidate(
+      rawJob: RawJob,
+      parsed: Parsed,
+    )
+
   private final case class IntroPattern(
       pattern: Regex,
       companyBuilder: Regex.Match => String,
@@ -89,6 +94,7 @@ object SemiStructuredPostParser {
   private val HeaderNoiseMarkers =
     List(
       "ish",
+      "ish bor",
       "vakansiya",
       "ishga taklif",
       "ishga qabul boshlandi",
@@ -136,9 +142,21 @@ object SemiStructuredPostParser {
       ),
       IntroPattern(
         pattern =
+          s"""(?iu)^(.+?)\\s+(jamoasiga)\\s+$IntroActionPattern[\\s:!.-]*$$""".r,
+        companyBuilder = matched => composeIntroCompany(matched.group(1), matched.group(2)),
+        titleGroup = None,
+      ),
+      IntroPattern(
+        pattern =
           s"""(?iu)^(.+?)\\s+(firmasiga|firmaga|korxonasiga|korxonaga|kompaniyasiga|kompaniyaga|do'koni'?ga|do'konga|restoraniga|restoranga|markaziga|markazga|klinikasiga|klinikaga|bog'chasiga|bog'chaga|kafega|cafega|filialiga|filiallariga|muassasasiga|tashkilotiga|mchj\\s*ga|mchjga|ofisiga|offisiga)\\s+(.+?)\\s+$IntroActionPattern[\\s:!.-]*$$""".r,
         companyBuilder = matched => composeIntroCompany(matched.group(1), matched.group(2)),
         titleGroup = Some(3),
+      ),
+      IntroPattern(
+        pattern =
+          s"""(?iu)^(.+?)\\s+(firmasiga|firmaga|korxonasiga|korxonaga|kompaniyasiga|kompaniyaga|do'koni'?ga|do'konga|restoraniga|restoranga|markaziga|markazga|klinikasiga|klinikaga|bog'chasiga|bog'chaga|kafega|cafega|filialiga|filiallariga|muassasasiga|tashkilotiga|mchj\\s*ga|mchjga|ofisiga|offisiga)\\s+$IntroActionPattern[\\s:!.-]*$$""".r,
+        companyBuilder = matched => composeIntroCompany(matched.group(1), matched.group(2)),
+        titleGroup = None,
       ),
     )
 
@@ -174,7 +192,24 @@ object SemiStructuredPostParser {
       "offisiga" -> "offisi",
     )
 
-  def parse(rawJob: RawJob): Either[Rejected, Parsed] = {
+  def parse(rawJob: RawJob): Either[Rejected, Parsed] =
+    parseSingle(rawJob)
+
+  def parseMany(rawJob: RawJob): Either[Rejected, List[ParsedCandidate]] =
+    buildSplitCandidates(rawJob) match {
+      case Some(splitJobs) =>
+        splitJobs.foldLeft[Either[Rejected, List[ParsedCandidate]]](Right(List.empty)) {
+          case (acc, splitJob) =>
+            for {
+              parsedCandidates <- acc
+              parsed <- parseSingle(splitJob)
+            } yield parsedCandidates :+ ParsedCandidate(splitJob, parsed)
+        }
+      case None =>
+        parseSingle(rawJob).map(parsed => List(ParsedCandidate(rawJob, parsed)))
+    }
+
+  private def parseSingle(rawJob: RawJob): Either[Rejected, Parsed] = {
     val lines = normalizeLines(rawJob.description).toVector
     val extractedDetails = XorazmIshSourceJobEtl.enrich(rawJob)
     val details =
@@ -313,7 +348,19 @@ object SemiStructuredPostParser {
     TitleMarkers.exists(marker => text.contains(marker)) ||
     text.contains("ishga taklif") ||
     text.contains("ishga qabul") ||
-    text.contains("vakansiya")
+    text.contains("vakansiya") ||
+    List(
+      CompanyMarkers,
+      SalaryMarkers,
+      AddressMarkers,
+      LandmarkMarkers,
+      WorkScheduleMarkers,
+      RequirementsMarkers,
+      ResponsibilitiesMarkers,
+      BenefitsMarkers,
+      AdditionalMarkers,
+      ContactMarkers,
+    ).count(markers => lines.exists(startsWithAny(_, markers))) >= 2
   }
 
   private def hasMultipleRoleSignals(lines: Vector[String]): Boolean = {
@@ -342,7 +389,7 @@ object SemiStructuredPostParser {
 
     lines
       .take(boundaryIndex)
-      .map(cleanContentLine)
+      .map(cleanHeaderLine)
       .filterNot(isHeaderNoiseLine)
       .filter(_.nonEmpty)
   }
@@ -351,30 +398,30 @@ object SemiStructuredPostParser {
     val normalized = normalize(value)
 
     HeaderNoiseMarkers.contains(normalized) ||
+    VacancyListMarkers.exists(marker => normalized.startsWith(normalize(marker))) ||
     normalized.forall(ch => !ch.isLetterOrDigit)
   }
 
   private def isRoleCandidate(value: String): Boolean = {
-    val cleaned = cleanContentLine(value)
-    val normalized = normalize(cleaned)
+    val cleaned = cleanHeaderLine(value)
 
     cleaned.nonEmpty &&
     !isHeaderNoiseLine(cleaned) &&
     !looksLikeIntroLine(cleaned) &&
+    !startsWithAny(cleaned, VacancyListMarkers) &&
     !isBodyBoundary(cleaned) &&
     !cleaned.endsWith(".") &&
     cleaned.split("\\s+").length <= 8
   }
 
   private def isVacancyRoleLine(value: String): Boolean = {
-    val cleaned = cleanContentLine(value)
+    val normalizedLine =
+      value
+        .replace("\uFE0F", "")
+        .replace("\u200D", "")
+        .trim
 
-    cleaned.matches("""^\d+[.)].+""") ||
-    cleaned.startsWith("•") ||
-    cleaned.startsWith("▪") ||
-    cleaned.startsWith("✍") ||
-    cleaned.startsWith("⬛") ||
-    cleaned.startsWith("🔹")
+    normalizedLine.matches("""^(?:[-•▪◦●✍🔹⬛]+|\d+[.)])\s*.+$""")
   }
 
   private def looksLikeIntroLine(value: String): Boolean = {
@@ -434,7 +481,7 @@ object SemiStructuredPostParser {
   }
 
   private def validateTitle(value: String): Either[Rejected, String] = {
-    val normalizedTitle = stripWrappedQuotes(cleanContentLine(value))
+    val normalizedTitle = stripWrappedQuotes(cleanHeaderLine(value))
 
     if (normalizedTitle.isEmpty) Left(Rejected(RejectionReason.MissingTitle))
     else if (looksLikeMultiRole(normalizedTitle)) Left(Rejected(RejectionReason.MultipleRolesDetected))
@@ -447,12 +494,64 @@ object SemiStructuredPostParser {
     MultiRoleSeparators.exists(normalized.contains)
   }
 
+  private def buildSplitCandidates(rawJob: RawJob): Option[List[RawJob]] = {
+    val lines = normalizeLines(rawJob.description).toVector
+
+    lines.indexWhere(startsWithAny(_, VacancyListMarkers)) match {
+      case -1 =>
+        None
+      case vacancyIndex =>
+        val roleLines =
+          lines
+            .drop(vacancyIndex + 1)
+            .takeWhile(isVacancyRoleLine)
+            .map(cleanRoleLine)
+            .filter(_.nonEmpty)
+        val sharedBodyStart = vacancyIndex + 1 + roleLines.length
+        val sharedBody = lines.drop(sharedBodyStart)
+        val prefixLines = buildSplitPrefix(lines.take(vacancyIndex))
+
+        if (
+          roleLines.length < 2 ||
+          sharedBody.isEmpty ||
+          !sharedBody.headOption.exists(isBodyBoundary) ||
+          roleLines.exists(looksLikeMultiRole)
+        ) None
+        else
+          Some(
+            roleLines.zipWithIndex.map { case (role, index) =>
+              rawJob.copy(
+                title = role,
+                description = (prefixLines ++ Vector(role) ++ sharedBody).mkString("\n"),
+                url = s"${rawJob.url}#role-${index + 1}",
+              )
+            }.toList
+          )
+    }
+  }
+
+  private def buildSplitPrefix(lines: Vector[String]): Vector[String] = {
+    val usefulLines =
+      lines.filter { line =>
+        extractIntroFacts(line).nonEmpty ||
+        looksLikeIntroLine(line) ||
+        startsWithAny(line, CompanyMarkers)
+      }
+
+    usefulLines.distinct
+  }
+
   private def stripMarkersFromLine(value: String, markers: List[String]): String =
-    markers.sortBy(-_.length).foldLeft(cleanContentLine(value)) { case (current, marker) =>
-      if (startsWithAny(current, List(marker)))
-        current.replaceFirst(s"(?iu)^\\Q$marker\\E(?:\\s*[:\\-–—]\\s*|\\s+)?", "")
-      else current
-    }.trim
+    {
+      val cleaned = cleanContentLine(value)
+
+      markers
+        .sortBy(-_.length)
+        .find(marker => startsWithAny(cleaned, List(marker)))
+        .map(marker => cleaned.replaceFirst(s"(?iu)^\\Q$marker\\E(?:\\s*[:\\-–—]\\s*|\\s+)?", ""))
+        .getOrElse(cleaned)
+        .trim
+    }
 
   private def extractWorkSchedule(lines: Vector[String]): Option[String] =
     lines.indexWhere(startsWithAny(_, WorkScheduleMarkers)) match {
@@ -551,7 +650,7 @@ object SemiStructuredPostParser {
   }
 
   private def startsWithAny(value: String, markers: List[String]): Boolean = {
-    val key = normalize(value)
+    val key = normalize(normalizeMarkerPrefix(value))
 
     markers.sortBy(-_.length).exists { marker =>
       val normalizedMarker = normalize(marker)
@@ -563,7 +662,7 @@ object SemiStructuredPostParser {
   }
 
   private def startsWithStrictLabel(value: String, markers: List[String]): Boolean = {
-    val key = normalize(value)
+    val key = normalize(normalizeMarkerPrefix(value))
 
     markers.sortBy(-_.length).exists { marker =>
       val normalizedMarker = normalize(marker)
@@ -580,6 +679,23 @@ object SemiStructuredPostParser {
         stripBullet(value)
       )
     )
+
+  private def cleanHeaderLine(value: String): String =
+    normalizeWhitespace(
+      stripBullet(value)
+        .replace("\uFE0F", "")
+        .replace("\u200D", "")
+        .replaceAll("""^[\s\p{S}#]+""", "")
+        .replaceAll("""[\s\p{S}]+$""", "")
+    )
+
+  private def cleanRoleLine(value: String): String =
+    stripWrappedQuotes(
+      cleanHeaderLine(value)
+    )
+
+  private def normalizeMarkerPrefix(value: String): String =
+    normalizeWhitespace(stripDecorations(value))
 
   private def stripDecorations(value: String): String =
     value

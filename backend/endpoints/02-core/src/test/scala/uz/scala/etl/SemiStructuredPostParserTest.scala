@@ -118,6 +118,57 @@ object SemiStructuredPostParserTest extends SimpleIOSuite {
     expect.same(StructuredPostParser.RejectionReason.MultipleRolesDetected, rejected.reason)
   }
 
+  pureTest("parseMany splits shared-body vacancy list from screenshot into three jobs") {
+    val parsed =
+      expectParsedMany(
+        rawJob(
+          source = "xorazm_ish_bor_elonlar",
+          url = "https://t.me/Xorazm_ish_bor_elonlar/99999",
+          description =
+            """ISH BOR
+              |📦 Bo'sh ish o'rinlari:
+              |• Ofitsiant (yigit-qizlar)
+              |• Uborchitsa
+              |• Posuda moykachi
+              |
+              |🏢 Ish joyi: Sulton Maram restorani
+              |📍 Manzil: Raysentr
+              |🎯 Mo'ljal: Abbos apteka yonida
+              |⏰ Ish vaqti: 11:00 - 23:00
+              |💰 Ish haqi: Kunlik 150 000 so'm
+              |
+              |📋 Talablar:
+              |• Chaqqon va xushmuomala
+              |• Ish tajribasiga ega bo'lishi kerak
+              |• Mas'uliyatli va tartibli
+              |
+              |📞 Bog'lanish:
+              |📱 +998 95 984 55 00
+              |
+              |👉 @Xorazm_ish_bor_elonlar""".stripMargin
+        )
+      )
+
+    val titles = parsed.map(_.parsed.title)
+
+    expect.same(List("Ofitsiant (yigit-qizlar)", "Uborchitsa", "Posuda moykachi"), titles) &&
+    expect(parsed.forall(candidate => candidate.parsed.company == "Sulton Maram restorani")) &&
+    expect(parsed.forall(candidate => candidate.parsed.salary.exists(_.contains("Kunlik 150 000 so'm")))) &&
+    expect(parsed.forall(candidate => candidate.parsed.location.contains("Raysentr (Abbos apteka yonida)"))) &&
+    expect(parsed.forall(candidate => candidate.parsed.details.workSchedule.contains("11:00 - 23:00"))) &&
+    expect(
+      parsed.forall(
+        _.parsed.details.requirements.contains(
+          "Chaqqon va xushmuomala\nIsh tajribasiga ega bo'lishi kerak\nMas'uliyatli va tartibli"
+        )
+      )
+    ) &&
+    expect(parsed.forall(_.parsed.details.contactPhoneNumbers == List("+998959845500"))) &&
+    expect(parsed.map(_.rawJob.url).zipWithIndex.forall { case (url, index) =>
+      url.endsWith(s"#role-${index + 1}")
+    })
+  }
+
   private def rawJob(
       description: String,
       source: String,
@@ -140,6 +191,13 @@ object SemiStructuredPostParserTest extends SimpleIOSuite {
       case Right(value) => value
       case Left(rejected) =>
         throw new AssertionError(s"expected parsed semi-structured post, got ${rejected.reason.code}")
+    }
+
+  private def expectParsedMany(rawJob: RawJob): List[SemiStructuredPostParser.ParsedCandidate] =
+    SemiStructuredPostParser.parseMany(rawJob) match {
+      case Right(value) => value
+      case Left(rejected) =>
+        throw new AssertionError(s"expected parsed semi-structured jobs, got ${rejected.reason.code}")
     }
 
   private def expectRejected(rawJob: RawJob): StructuredPostParser.Rejected =
