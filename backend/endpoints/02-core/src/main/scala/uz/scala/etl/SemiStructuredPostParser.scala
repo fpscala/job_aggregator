@@ -89,7 +89,7 @@ object SemiStructuredPostParser {
     )
 
   private val VacancyListMarkers =
-    List("bo'sh ish o'rinlari", "vakansiyalar", "vakansiya lar", "ish o'rinlari")
+    List("bo'sh ish o'rinlari", "ish lavozimlari", "vakansiyalar", "vakansiya lar", "ish o'rinlari", "lavozimlar")
 
   private val HeaderNoiseMarkers =
     List(
@@ -250,7 +250,7 @@ object SemiStructuredPostParser {
         else Right(())
     } yield Parsed(
       title = title,
-      company = company,
+      company = Some(company),
       salary = salary,
       location = location,
       details = details,

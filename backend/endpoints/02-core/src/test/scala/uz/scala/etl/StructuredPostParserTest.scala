@@ -44,7 +44,7 @@ object StructuredPostParserTest extends SimpleIOSuite {
       )
 
     expect.same("Kassir", parsed.title) &&
-    expect.same("XON BOZOR", parsed.company) &&
+    expect.same(Some("XON BOZOR"), parsed.company) &&
     expect.same(Some("Suhbat asosida"), parsed.salary) &&
     expect.same(Some("Urganch shahri, Xiva krug, “Xon Bozor” majmuasi"), parsed.location) &&
     expect.same(Some("09:00 dan 23:00 gacha"), parsed.details.workSchedule) &&
@@ -85,7 +85,7 @@ object StructuredPostParserTest extends SimpleIOSuite {
       )
 
     expect.same("Savdo xodimi", parsed.title) &&
-    expect.same("PORT Foods MChJ", parsed.company) &&
+    expect.same(Some("PORT Foods MChJ"), parsed.company) &&
     expect.same(Some("Turtkul, Beruniy, Boston, Ellikkala"), parsed.location) &&
     expect.same(Some("09:00 dan 17:00 gacha\n7/6"), parsed.details.workSchedule) &&
     expect.same(Some("6 000 000 – 10 000 000 so'm"), parsed.salary) &&
@@ -125,7 +125,7 @@ object StructuredPostParserTest extends SimpleIOSuite {
       )
 
     expect.same("Savdo agenti", parsed.title) &&
-    expect.same("Candy Gold konditer firmasi", parsed.company) &&
+    expect.same(Some("Candy Gold konditer firmasi"), parsed.company) &&
     expect.same(Some("4.000.000 - 7.000.000 so'm (fiksa + KPI + bonus)"), parsed.salary) &&
     expect.same(Some("Urganch shahri, Xonqa ko'chasi (Eco Metan)"), parsed.location) &&
     expect.same(None, parsed.details.workSchedule) &&
@@ -160,7 +160,7 @@ object StructuredPostParserTest extends SimpleIOSuite {
       )
 
     expect.same("qandolatchilar", parsed.title) &&
-    expect.same("JASMIN Cake bakery jamoasi", parsed.company) &&
+    expect.same(Some("JASMIN Cake bakery jamoasi"), parsed.company) &&
     expect.same(Some("(ishbay) 120.000 so'mdan boshlanadi"), parsed.salary) &&
     expect.same(Some("Urganch shahri (Amina do'koni)"), parsed.location) &&
     expect.same(Some("09:00 - 19:00"), parsed.details.workSchedule) &&
@@ -191,7 +191,7 @@ object StructuredPostParserTest extends SimpleIOSuite {
       )
 
     expect.same("Savdo xodimi", parsed.title) &&
-    expect.same("PORT Foods MChJ", parsed.company) &&
+    expect.same(Some("PORT Foods MChJ"), parsed.company) &&
     expect.same(Some("6 000 000 - 10 000 000 so'm"), parsed.salary) &&
     expect.same(Some("Turtkul, Beruniy, Boston, Ellikkala"), parsed.location) &&
     expect.same(Some("09:00 dan 17:00 gacha\n7/6"), parsed.details.workSchedule) &&
@@ -333,6 +333,73 @@ object StructuredPostParserTest extends SimpleIOSuite {
               |👉 @Xorazm_ish""".stripMargin
         )
       )
+
+    expect.same(StructuredPostParser.RejectionReason.MissingPhone, rejected.reason)
+  }
+
+  pureTest("parses Russian-language structured post with Cyrillic labels") {
+    val parsed = expectParsed(
+      rawJob(
+        source = "Xorazm_ish",
+        url = "https://t.me/Xorazm_ish/40113",
+        description =
+          """#ish
+            |Частный детский сад приглашает на работу женщин на должность.
+            |
+            |▪️Воспитательница
+            |
+            |Общие требования:
+            |• Только женщины
+            |• Совершенное владение русским языком
+            |• Пунктуальная, дисциплинированная
+            |
+            |Рабочее время: 08:00 - 18:00.
+            |Заработная плата согласовывается на основе собеседования
+            |
+            |Адрес: город Ургенч, улица Галаба, дом 11/1.
+            |Ориентир: Электросеть г. Ургенч.
+            |
+            |Tел: +998997762555
+            |
+            |👉 @Xorazm_ish""".stripMargin,
+      )
+    )
+
+    expect.same("Воспитательница", parsed.title) &&
+    expect.same(Some("Частный детский сад"), parsed.company) &&
+    expect.same(Some("согласовывается на основе собеседования"), parsed.salary) &&
+    expect.same(
+      Some("город Ургенч, улица Галаба, дом 11/1. (Электросеть г. Ургенч.)"),
+      parsed.location,
+    ) &&
+    expect.same(Some("08:00 - 18:00."), parsed.details.workSchedule) &&
+    expect.same(List("+998997762555"), parsed.details.contactPhoneNumbers)
+  }
+
+  pureTest("rejects Russian-language post that is missing a phone number") {
+    val rejected = expectRejected(
+      rawJob(
+        source = "Xorazm_ish",
+        url = "https://t.me/Xorazm_ish/40114",
+        description =
+          """#ish
+            |Частный детский сад приглашает на работу женщин на должность.
+            |
+            |▪️Воспитательница
+            |
+            |Общие требования:
+            |• Только женщины
+            |• Совершенное владение русским языком
+            |
+            |Рабочее время: 08:00 - 18:00.
+            |Заработная плата согласовывается на основе собеседования
+            |
+            |Адрес: город Ургенч, улица Галаба, дом 11/1.
+            |Ориентир: Электросеть г. Ургенч.
+            |
+            |👉 @Xorazm_ish""".stripMargin,
+      )
+    )
 
     expect.same(StructuredPostParser.RejectionReason.MissingPhone, rejected.reason)
   }

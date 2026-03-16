@@ -11,7 +11,7 @@ import uz.scala.domain.jobs.JobDetails
 object StructuredPostParser {
   final case class Parsed(
       title: String,
-      company: String,
+      company: Option[String],
       salary: Option[String],
       location: Option[String],
       details: JobDetails,
@@ -143,7 +143,11 @@ object StructuredPostParser {
     }
   }
 
-  private final case class LabelAlias(kind: LabelKind, alias: String) {
+  private final case class LabelAlias(
+      kind: LabelKind,
+      alias: String,
+      acceptSpaceSeparated: Boolean = false,
+    ) {
     private val quotedAlias = Pattern.quote(alias)
 
     private val withDelimiter =
@@ -152,12 +156,17 @@ object StructuredPostParser {
     private val standalone =
       (s"(?iu)^$quotedAlias\\s*$$").r
 
+    private val withSpaceValue =
+      (s"(?iu)^$quotedAlias\\s+(\\S.*)$$").r
+
     def detect(line: String): Option[DetectedLabel] =
       line match {
         case withDelimiter(value) =>
           Some(DetectedLabel(kind = kind, inlineValue = normalizeWhitespace(value)))
         case standalone() =>
           Some(DetectedLabel(kind = kind, inlineValue = ""))
+        case withSpaceValue(value) if acceptSpaceSeparated =>
+          Some(DetectedLabel(kind = kind, inlineValue = normalizeWhitespace(value)))
         case _ =>
           None
       }
@@ -203,7 +212,7 @@ object StructuredPostParser {
       LabelAlias(LabelKind.Address, "adres"),
       LabelAlias(LabelKind.Region, "hudud"),
       LabelAlias(LabelKind.Landmark, "mo'ljal"),
-      LabelAlias(LabelKind.Landmark, "mo‘ljal"),
+      LabelAlias(LabelKind.Landmark, "mo'ljal"),
       LabelAlias(LabelKind.Address, "манзил"),
       LabelAlias(LabelKind.Address, "адрес"),
       LabelAlias(LabelKind.WorkTime, "ish vaqti"),
@@ -267,10 +276,15 @@ object StructuredPostParser {
       LabelAlias(LabelKind.Responsibilities, "вазифаси"),
       LabelAlias(LabelKind.Responsibilities, "обязанности"),
       LabelAlias(LabelKind.Additional, "qo'shimcha"),
-      LabelAlias(LabelKind.Additional, "qo‘shimcha"),
+      LabelAlias(LabelKind.Additional, "qo'shimcha"),
       LabelAlias(LabelKind.Additional, "eslatma"),
       LabelAlias(LabelKind.Additional, "қўшимча"),
       LabelAlias(LabelKind.Additional, "эслатма"),
+      LabelAlias(LabelKind.Salary, "заработная плата", acceptSpaceSeparated = true),
+      LabelAlias(LabelKind.Requirements, "общие требования"),
+      LabelAlias(LabelKind.WorkTime, "рабочее время"),
+      LabelAlias(LabelKind.WorkTime, "график работы"),
+      LabelAlias(LabelKind.Landmark, "ориентир"),
     ).sortBy(alias => -alias.alias.length)
 
   private val VisibleUrlPattern: Regex =
@@ -317,6 +331,8 @@ object StructuredPostParser {
       "jamoasiga",
       "jamoamizga",
       "kengayotganligi munosabati bilan",
+      "приглашает на работу",
+      "приглашает к сотрудничеству",
     )
 
   private val MultiRoleHeaderMarkers =
@@ -395,6 +411,12 @@ object StructuredPostParser {
       IntroPattern(
         pattern =
           """(?iu)^(.+?)\s+sizga\s+bo'sh\s+ish\s+o'rinlarini\s+taklif\s+etadi[\s:.-]*$""".r,
+        companyBuilder = matched => stripWrappedQuotes(cleanTitle(matched.group(1))),
+        titleGroup = None,
+      ),
+      IntroPattern(
+        pattern =
+          """(?iu)^(.+?)\s+приглашает\s+(?:на\s+работу|к\s+сотрудничеству)[^.!]*[.!]?\s*$""".r,
         companyBuilder = matched => stripWrappedQuotes(cleanTitle(matched.group(1))),
         titleGroup = None,
       ),
@@ -478,7 +500,7 @@ object StructuredPostParser {
             Right(
               Parsed(
                 title = title,
-                company = company.get,
+                company = company,
                 salary = salary,
                 location = location,
                 details =
@@ -815,10 +837,53 @@ object StructuredPostParser {
       .findFirstMatchIn(link)
       .exists(matchResult => ignoredUsernames.contains(matchResult.group(1).toLowerCase(Locale.ROOT)))
 
+  private val LatinToCyrillicLookalikes: Map[Char, Char] =
+    Map(
+      'T' -> 'Т',
+      'C' -> 'С',
+      'A' -> 'А',
+      'E' -> 'Е',
+      'O' -> 'О',
+      'B' -> 'В',
+      'M' -> 'М',
+      'P' -> 'Р',
+      'X' -> 'Х',
+      'H' -> 'Н',
+      't' -> 'т',
+      'c' -> 'с',
+      'a' -> 'а',
+      'e' -> 'е',
+      'o' -> 'о',
+      'b' -> 'в',
+      'm' -> 'м',
+      'p' -> 'р',
+      'x' -> 'х',
+      'h' -> 'н',
+    )
+
+  private def normalizeMixedCyrillicLabel(value: String): String = {
+    val delimiterIndex =
+      value.indexWhere(c => c == ':' || c == '-' || c == '–' || c == '—')
+    val labelPart =
+      if (delimiterIndex >= 0) value.substring(0, delimiterIndex) else value
+    val cyrillicCount =
+      labelPart.count(c => c >= '\u0400' && c <= '\u04FF')
+    val latinCount =
+      labelPart.count(c => (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z'))
+
+    if (cyrillicCount > latinCount && latinCount > 0) {
+      val normalizedLabel = labelPart.map(c => LatinToCyrillicLookalikes.getOrElse(c, c))
+      if (delimiterIndex >= 0) normalizedLabel + value.substring(delimiterIndex)
+      else normalizedLabel
+    } else
+      value
+  }
+
   private def detectLabel(line: String): Option[DetectedLabel] = {
     val stripped = stripDecorations(line)
+    val normalized = normalizeMixedCyrillicLabel(stripped)
 
-    LabelAliases.view.flatMap(_.detect(stripped)).headOption
+    LabelAliases.view.flatMap(_.detect(normalized)).headOption
   }
 
   private def looksLikeMultiRole(title: String): Boolean = {
@@ -846,7 +911,7 @@ object StructuredPostParser {
       .trim
 
   private def stripWrappedQuotes(value: String): String =
-    value.trim.replaceAll("""^[\"'“”«»„‟]+|[\"'“”«»„‟]+$""", "").trim
+    value.trim.replaceAll("""^[\"'\u201c\u201d«»\u201e\u201f]+|[\"'\u201c\u201d«»\u201e\u201f]+$""", "").trim
 
   private def isLocationNoiseLine(value: String): Boolean = {
     val normalized = cleanContentLine(value).toLowerCase(Locale.ROOT)

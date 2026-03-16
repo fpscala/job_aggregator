@@ -12,6 +12,8 @@ import uz.scala.domain.enums.InsertResult
 import uz.scala.domain.events.RawJob
 import uz.scala.domain.jobs.Job
 import uz.scala.effects.Calendar
+import uz.scala.etl.FieldOnlyStructuredPostParser
+import uz.scala.etl.NarrativeRecruitmentPostParser
 import uz.scala.etl.SemiStructuredPostParser
 import uz.scala.etl.StructuredPostParser
 import uz.scala.repos.dto
@@ -51,9 +53,19 @@ object JobsAlgebra {
             case Right(parsed) =>
               Right(List(ParsedCandidate(rawJob, parsed)))
             case Left(_) =>
-              SemiStructuredPostParser
-                .parseMany(rawJob)
-                .map(_.map(candidate => ParsedCandidate(candidate.rawJob, candidate.parsed)))
+              FieldOnlyStructuredPostParser.parse(rawJob) match {
+                case Right(parsed) =>
+                  Right(List(ParsedCandidate(rawJob, parsed)))
+                case Left(_) =>
+                  NarrativeRecruitmentPostParser.parse(rawJob) match {
+                    case Right(parsed) =>
+                      Right(List(ParsedCandidate(rawJob, parsed)))
+                    case Left(_) =>
+                      SemiStructuredPostParser
+                        .parseMany(rawJob)
+                        .map(_.map(candidate => ParsedCandidate(candidate.rawJob, candidate.parsed)))
+                  }
+              }
           }
 
         parsedResult match {
@@ -77,7 +89,7 @@ object JobsAlgebra {
                       createdAt = createdAt,
                       details = candidate.parsed.details,
                       titleOverride = Some(candidate.parsed.title),
-                      companyOverride = Some(candidate.parsed.company),
+                      companyOverride = candidate.parsed.company,
                       salaryOverride = candidate.parsed.salary,
                       locationOverride = candidate.parsed.location,
                     )

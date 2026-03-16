@@ -9,6 +9,7 @@ import uz.scala.JobsEnvironment
 import uz.scala.domain.jobs.Job
 import uz.scala.jobs.Job.AutoName
 import uz.scala.telegram.TelegramCaptionRenderer
+import uz.scala.telegram.TelegramPublishEligibility
 
 object TelegramChannelPublishJob
     extends AutoName[IO]
@@ -20,11 +21,16 @@ object TelegramChannelPublishJob
       case None => IO.unit
       case Some(config) =>
         for {
-          jobs <- env.algebras.jobs.findReadyForPublication(
+          readyJobs <- env.algebras.jobs.findReadyForPublication(
             config.channelChatId,
             config.batchSize,
           )
+          jobs = readyJobs.filter(TelegramPublishEligibility.isEligible)
+          skipped = readyJobs.size - jobs.size
           _ <- logger.info(s"Found ${jobs.size} jobs ready for Telegram publishing")
+          _ <- if (skipped > 0)
+            logger.warn(s"Skipped $skipped non-publishable jobs for Telegram channel=${config.channelChatId}")
+          else IO.unit
           _ <- jobs.traverse_(publishOne(_, config))
         } yield ()
     }

@@ -43,7 +43,7 @@ object SemiStructuredPostParserTest extends SimpleIOSuite {
       )
 
     expect.same("ta'minotchilar", parsed.title) &&
-    expect.same("INFINITY IMPEX MCHJ Urganch filiali", parsed.company) &&
+    expect.same(Some("INFINITY IMPEX MCHJ Urganch filiali"), parsed.company) &&
     expect.same(None, parsed.salary) &&
     expect.same(Some("Ish vaqti va oylik suhbat asosida kelishiladi"), parsed.details.workSchedule) &&
     expect.same(List("infinityimpex1"), parsed.details.contactTelegramUsernames) &&
@@ -80,7 +80,7 @@ object SemiStructuredPostParserTest extends SimpleIOSuite {
       )
 
     expect.same("ishchilar", parsed.title) &&
-    expect.same("Avikassa va tur firma", parsed.company) &&
+    expect.same(Some("Avikassa va tur firma"), parsed.company) &&
     expect.same(Some("suhbat asosida kelishiladi\nSavdo hajmiga qarab belgilanadi"), parsed.salary) &&
     expect.same(Some("Urganch shahri"), parsed.location) &&
     expect.same(List("shovshuvtravel"), parsed.details.contactTelegramUsernames) &&
@@ -152,7 +152,7 @@ object SemiStructuredPostParserTest extends SimpleIOSuite {
     val titles = parsed.map(_.parsed.title)
 
     expect.same(List("Ofitsiant (yigit-qizlar)", "Uborchitsa", "Posuda moykachi"), titles) &&
-    expect(parsed.forall(candidate => candidate.parsed.company == "Sulton Maram restorani")) &&
+    expect(parsed.forall(candidate => candidate.parsed.company.contains("Sulton Maram restorani"))) &&
     expect(parsed.forall(candidate => candidate.parsed.salary.exists(_.contains("Kunlik 150 000 so'm")))) &&
     expect(parsed.forall(candidate => candidate.parsed.location.contains("Raysentr (Abbos apteka yonida)"))) &&
     expect(parsed.forall(candidate => candidate.parsed.details.workSchedule.contains("11:00 - 23:00"))) &&
@@ -167,6 +167,54 @@ object SemiStructuredPostParserTest extends SimpleIOSuite {
     expect(parsed.map(_.rawJob.url).zipWithIndex.forall { case (url, index) =>
       url.endsWith(s"#role-${index + 1}")
     })
+  }
+
+  pureTest("parseMany splits 'Ish lavozimlari' multi-role post into separate jobs") {
+    val candidates =
+      expectParsedMany(
+        rawJob(
+          source = "xorazm_ish_bor_elonlar",
+          url = "https://t.me/Xorazm_ish_bor_elonlar/99",
+          description =
+            """YANGI ISH
+              |Ish lavozimlari:
+              |• Supervayzer
+              |• Savdo agenti
+              |
+              |Ish beruvchi: Melagrana Distribution
+              |
+              |Manzil: Urganch tumani, G'oybu qishlog'i
+              |
+              |Ish vaqti:
+              |Haftada 6 kun
+              |Yakshanba — dam olish
+              |
+              |Ish haqi:
+              |• Supervayzer: 8 000 000 – 12 000 000 so'm
+              |• Savdo agenti: 6 000 000 – 10 000 000 so'm
+              |
+              |Talablar:
+              |• Faqat yigitlar (18–35 yosh)
+              |• Shaxsiy avtomashina bo'lishi shart
+              |• Hisob-kitobni yaxshi bilishi
+              |• Tajriba bo'lsa afzal
+              |• Urganch shahar yoki Urganch tumanida yashashi kerak
+              |
+              |Telefon:
+              |+998 88 992 48 48
+              |+998 97 925 41 11
+              |
+              |👉 @Xorazm_ish_bor_elonlar""".stripMargin,
+        )
+      )
+
+    expect.same(2, candidates.length) &&
+    expect.same("Supervayzer", candidates(0).parsed.title) &&
+    expect.same("Savdo agenti", candidates(1).parsed.title) &&
+    expect.same(Some("Melagrana Distribution"), candidates(0).parsed.company) &&
+    expect.same(Some("Melagrana Distribution"), candidates(1).parsed.company) &&
+    expect(candidates(0).parsed.details.contactPhoneNumbers.nonEmpty) &&
+    expect(candidates(1).parsed.details.contactPhoneNumbers.nonEmpty)
   }
 
   private def rawJob(

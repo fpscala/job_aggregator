@@ -31,6 +31,7 @@ object JobsSql extends Sql[Job] {
         WHERE job_channel_posts.job_id = jobs.id
           AND job_channel_posts.channel_chat_id = $channelChatId
       )
+        AND lower(btrim(jobs.title)) NOT IN ('raw_post', 'placeholder')
       ORDER BY jobs.posted_at ASC, jobs.created_at ASC
       LIMIT $limit
     """.query[Job]
