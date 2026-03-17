@@ -5,8 +5,6 @@ import java.util.Locale
 import scala.util.matching.Regex
 
 import uz.scala.domain.events.RawJob
-import uz.scala.domain.jobs.JobDetails
-import uz.scala.etl.sources.XorazmIshSourceJobEtl
 
 object NarrativeRecruitmentPostParser {
   import StructuredPostParser.{Parsed, Rejected}
@@ -84,7 +82,7 @@ object NarrativeRecruitmentPostParser {
     if (!looksLikeNarrativeRecruitment(lines))
       Left(Rejected(RejectionReason.MissingStructuredLabels))
     else {
-      val extractedDetails = XorazmIshSourceJobEtl.enrich(rawJob)
+      val extractedDetails = SourceJobEtls.enrich(rawJob)
       val title = cleanTitle(rawJob.title).filter(_.nonEmpty)
       val company =
         rawJob.company.map(cleanValue).filter(_.nonEmpty).orElse(extractCompany(lines))

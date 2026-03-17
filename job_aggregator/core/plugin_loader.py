@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import importlib
 import logging
 from dataclasses import dataclass
 from pathlib import Path
@@ -68,7 +69,7 @@ class PluginLoader:
             if not config.enabled:
                 logger.info("Skipping disabled source config '%s'", plugin_dir.name)
                 return None
-            parser = RawMessageParser(config=config, plugin_name=plugin_dir.name)
+            parser = self._build_parser(plugin_dir, config)
         except Exception:
             logger.exception("Failed to load source config '%s'", plugin_dir.name)
             return None
@@ -85,3 +86,21 @@ class PluginLoader:
         with config_path.open("r", encoding="utf-8") as config_file:
             raw_config = yaml.safe_load(config_file) or {}
         return ParserConfig.model_validate(raw_config)
+
+    def _build_parser(self, plugin_dir: Path, config: ParserConfig) -> BaseParser:
+        parser_path = plugin_dir / "parser.py"
+        if not parser_path.exists():
+            logger.info(
+                "Source config '%s' has no parser.py; using RawMessageParser fallback",
+                plugin_dir.name,
+            )
+            return RawMessageParser(config=config, plugin_name=plugin_dir.name)
+
+        module = importlib.import_module(f"job_aggregator.parsers.{plugin_dir.name}.parser")
+        parser_cls = getattr(module, "Parser", None)
+        if parser_cls is None:
+            raise AttributeError(f"Plugin '{plugin_dir.name}' does not define a Parser class")
+        if not issubclass(parser_cls, BaseParser):
+            raise TypeError(f"Plugin '{plugin_dir.name}' Parser must inherit from BaseParser")
+
+        return parser_cls(config=config, plugin_name=plugin_dir.name)

@@ -5,7 +5,6 @@ import java.util.Locale
 import scala.util.matching.Regex
 
 import uz.scala.domain.events.RawJob
-import uz.scala.etl.sources.XorazmIshSourceJobEtl
 
 object SemiStructuredPostParser {
   import StructuredPostParser.{Parsed, Rejected}
@@ -211,7 +210,7 @@ object SemiStructuredPostParser {
 
   private def parseSingle(rawJob: RawJob): Either[Rejected, Parsed] = {
     val lines = normalizeLines(rawJob.description).toVector
-    val extractedDetails = XorazmIshSourceJobEtl.enrich(rawJob)
+    val extractedDetails = SourceJobEtls.enrich(rawJob)
     val details =
       extractedDetails.copy(
         workSchedule = extractedDetails.workSchedule.orElse(extractWorkSchedule(lines)),

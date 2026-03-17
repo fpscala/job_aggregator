@@ -5,7 +5,6 @@ import java.util.Locale
 import scala.util.matching.Regex
 
 import uz.scala.domain.events.RawJob
-import uz.scala.etl.sources.XorazmIshSourceJobEtl
 
 object FieldOnlyStructuredPostParser {
   import StructuredPostParser.{Parsed, Rejected}
@@ -66,7 +65,7 @@ object FieldOnlyStructuredPostParser {
 
   def parse(rawJob: RawJob): Either[Rejected, Parsed] = {
     val lines = normalizedLines(rawJob.description)
-    val extractedDetails = XorazmIshSourceJobEtl.enrich(rawJob)
+    val extractedDetails = SourceJobEtls.enrich(rawJob)
     val labelCount =
       lines.count(line => startsWithAny(line, StructureMarkers))
 
