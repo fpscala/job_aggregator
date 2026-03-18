@@ -1,0 +1,17 @@
+.git
+.idea
+.venv
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.session
+*.session-journal
+.env
+backend/
+data/analysis/
+data/exports/
+data/telegram_login_qr.png
+docs/
+infra/
+tests/

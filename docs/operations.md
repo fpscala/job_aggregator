@@ -134,6 +134,47 @@ Live flow:
 3. Mos parser ishlaydi.
 4. `Job` qaytsa Kafka'ga publish bo'ladi.
 
+## Python ingestion Docker orqali
+
+Tavsiya etilgan volume:
+
+```text
+data/telegram-session/job_aggregator.session
+```
+
+Container ichidagi default session path:
+
+```text
+/app/runtime/job_aggregator.session
+```
+
+Docker build + run:
+
+```bash
+cd /Users/prince/IdeaProjects/job_aggregator
+docker compose \
+  --env-file .env \
+  -f infra/docker-compose.kafka.yml \
+  -f infra/docker-compose.ingestion.yml \
+  up -d --build
+```
+
+Muhim:
+
+- `TELEGRAM_API_ID` va `TELEGRAM_API_HASH` `.env` yoki shell envda bo'lishi shart.
+- Authorized Telethon session fayli `data/telegram-session/` ichida bo'lishi kerak.
+- Container ichidagi default broker `kafka:19092`, override uchun `INGESTION_KAFKA_BOOTSTRAP_SERVERS` ishlating.
+- Container ichidagi default session path `/app/runtime/job_aggregator.session`, override uchun `INGESTION_TELEGRAM_SESSION` ishlating.
+
+To'xtatish:
+
+```bash
+docker compose \
+  -f infra/docker-compose.kafka.yml \
+  -f infra/docker-compose.ingestion.yml \
+  down
+```
+
 ## Scala backendni ishga tushirish
 
 ```bash

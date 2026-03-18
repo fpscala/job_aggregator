@@ -117,6 +117,33 @@ What it does:
 3. Parses new posts into normalized jobs.
 4. Publishes raw JSON events into Kafka topic `jobs.raw`.
 
+## Python ingestion in Docker
+
+Build and run the Python ingestion app with Kafka:
+
+```bash
+docker compose \
+  --env-file .env \
+  -f infra/docker-compose.kafka.yml \
+  -f infra/docker-compose.ingestion.yml \
+  up -d --build
+```
+
+Notes:
+
+- Mount the authorized Telethon session into `data/telegram-session/`.
+- Inside the container the default session path is `/app/runtime/job_aggregator.session`.
+- If you need overrides, use `INGESTION_KAFKA_BOOTSTRAP_SERVERS` and `INGESTION_TELEGRAM_SESSION`.
+
+Stop it:
+
+```bash
+docker compose \
+  -f infra/docker-compose.kafka.yml \
+  -f infra/docker-compose.ingestion.yml \
+  down
+```
+
 ## Telegram authentication
 
 Python service expects an existing authorized Telethon session file.

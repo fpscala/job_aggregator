@@ -454,6 +454,9 @@ object StructuredPostParser {
 
         extractTitle(trimmedLines, labeledLines, ignoredUsernames, rawJob.url).flatMap { title =>
           val sections = buildSections(trimmedLines, labeledLines)
+          val sourceDetails =
+            if (rawJob.source == "ishchi_bor_kerak_toshkent") SourceJobEtls.enrich(rawJob)
+            else JobDetails.empty
 
           val company =
             compactValue(sectionLines(sections, LabelKind.Company))
@@ -461,18 +464,46 @@ object StructuredPostParser {
               .orElse(fallbackCompany)
           val salary = compactValue(sectionLines(sections, LabelKind.Salary), separator = "; ")
           val location = buildLocation(sections)
-          val workSchedule = multilineValue(sectionLines(sections, LabelKind.WorkTime))
-          val requirements = multilineValue(sectionLines(sections, LabelKind.Requirements))
-          val benefits = multilineValue(sectionLines(sections, LabelKind.Benefits))
-          val responsibilities = multilineValue(sectionLines(sections, LabelKind.Responsibilities))
-          val additional = multilineValue(sectionLines(sections, LabelKind.Additional))
+          val structuredRequirements = multilineValue(sectionLines(sections, LabelKind.Requirements))
+          val workSchedule =
+            mergeMultilineValues(
+              multilineValue(sectionLines(sections, LabelKind.WorkTime)),
+              sourceDetails.workSchedule,
+            )
+          val requirements =
+            if (rawJob.source == "ishchi_bor_kerak_toshkent")
+              sourceDetails.requirements.orElse(structuredRequirements)
+            else
+              mergeMultilineValues(
+                structuredRequirements,
+                sourceDetails.requirements,
+              )
+          val benefits =
+            mergeMultilineValues(
+              multilineValue(sectionLines(sections, LabelKind.Benefits)),
+              sourceDetails.benefits,
+            )
+          val responsibilities =
+            mergeMultilineValues(
+              multilineValue(sectionLines(sections, LabelKind.Responsibilities)),
+              sourceDetails.responsibilities,
+            )
+          val additional =
+            mergeMultilineValues(
+              multilineValue(sectionLines(sections, LabelKind.Additional)),
+              sourceDetails.additional,
+            )
 
           val applicationLines = sectionLines(sections, LabelKind.Application)
           val phoneLines = sectionLines(sections, LabelKind.Phone)
           val contactSourceText = (applicationLines ++ phoneLines).mkString("\n")
           val hasApplication = sections.exists(_.kind == LabelKind.Application)
-          val phoneNumbers = extractPhoneNumbers(contactSourceText)
-          val usernames = extractTelegramUsernames(contactSourceText, ignoredUsernames)
+          val phoneNumbers =
+            distinctPreservingOrder(extractPhoneNumbers(contactSourceText) ++ sourceDetails.contactPhoneNumbers)
+          val usernames =
+            distinctPreservingOrder(
+              extractTelegramUsernames(contactSourceText, ignoredUsernames) ++ sourceDetails.contactTelegramUsernames
+            )
           val visibleLinks =
             extractVisibleLinks(
               value = contactSourceText,
@@ -482,9 +513,15 @@ object StructuredPostParser {
           val hiddenLinks =
             if (hasApplication) rawJob.contactLinks.getOrElse(Nil)
             else Nil
-          val contactLinks = distinctPreservingOrder(hiddenLinks ++ visibleLinks)
+          val contactLinks =
+            distinctPreservingOrder(hiddenLinks ++ visibleLinks ++ sourceDetails.contactLinks)
           val applicationText =
-            sanitizeContactText(multilineValue(applicationLines), phoneNumbers, usernames, contactLinks)
+            sanitizeContactText(
+              mergeMultilineValues(multilineValue(applicationLines), sourceDetails.contactText),
+              phoneNumbers,
+              usernames,
+              contactLinks,
+            )
 
           val optionalFieldCount =
             List(salary, location, workSchedule, requirements, benefits).count(_.nonEmpty) +
@@ -550,6 +587,27 @@ object StructuredPostParser {
   private def multilineValue(lines: List[String]): Option[String] =
     Option(lines.map(cleanContentLine).filter(_.nonEmpty).distinct.mkString("\n"))
       .map(normalizeMultiline)
+      .filter(_.nonEmpty)
+
+  private def mergeMultilineValues(
+      primary: Option[String],
+      secondary: Option[String],
+    ): Option[String] = {
+    val mergedLines =
+      distinctPreservingOrder(
+        primary.toList.flatMap(splitMultilineValue) ++ secondary.toList.flatMap(splitMultilineValue)
+      )
+
+    Option(mergedLines.mkString("\n"))
+      .map(normalizeMultiline)
+      .filter(_.nonEmpty)
+  }
+
+  private def splitMultilineValue(value: String): List[String] =
+    value
+      .split('\n')
+      .toList
+      .map(cleanContentLine)
       .filter(_.nonEmpty)
 
   private def buildLocation(sections: List[Section]): Option[String] = {

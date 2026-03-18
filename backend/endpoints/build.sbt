@@ -79,7 +79,7 @@ lazy val `endpoints-runner` =
       `endpoints-server`,
       `endpoints-jobs`,
     )
-    .settings(DockerImagePlugin.serviceSetting("endpoints"))
+    .settings(DockerImagePlugin.serviceSetting("jobaggr-endpoints"))
     .enablePlugins(DockerImagePlugin, JavaAppPackaging, DockerPlugin)
 
 aggregateProjects(

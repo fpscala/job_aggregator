@@ -198,6 +198,45 @@ object StructuredPostParserTest extends SimpleIOSuite {
     expect.same(List("935879525"), parsed.details.contactPhoneNumbers)
   }
 
+  pureTest("merges source-specific Ish haqida details for ishchi_bor_kerak_toshkent") {
+    val parsed =
+      expectParsed(
+        rawJob(
+          source = "ishchi_bor_kerak_toshkent",
+          url = "https://t.me/ishchi_bor_kerak_toshkent/103614",
+          description =
+            """⚡️ MYFXBRO Trading kompaniyasiga call-markaz operatori kerak
+              |
+              |💵 Maosh: 8.000.000 - 20.000.000
+              |📍 Hudud: Toshkent
+              |
+              |📣 Ish haqida:
+              |– Mijozlar bilan savdo jarayonlarini olib borish
+              |– Telefon orqali va bevosita sotuvni amalga oshirish
+              |– Ravon gapirish va ishontirish orqali sotish
+              |
+              |❗️ Talablar:
+              |– 18–35 yosh (qat’iy)
+              |
+              |⏰ Ish vaqti:
+              |– 09:00 dan 18:00 gacha
+              |
+              |☎️ Bog‘lanish:
+              |– +998901234567""".stripMargin,
+        )
+      )
+
+    expect.same(Some("MYFXBRO Trading kompaniyasi"), parsed.company) &&
+    expect.same(
+      Some(
+        "Mijozlar bilan savdo jarayonlarini olib borish\nTelefon orqali va bevosita sotuvni amalga oshirish\nRavon gapirish va ishontirish orqali sotish"
+      ),
+      parsed.details.responsibilities,
+    ) &&
+    expect.same(Some("18-35 yosh (qat'iy)"), parsed.details.requirements) &&
+    expect.same(List("+998901234567"), parsed.details.contactPhoneNumbers)
+  }
+
   pureTest("keeps requirements clean when Bog'lanish starts a new section") {
     val parsed =
       expectParsed(
