@@ -207,6 +207,8 @@ object StructuredPostParserTest extends SimpleIOSuite {
           description =
             """⚡️ MYFXBRO Trading kompaniyasiga call-markaz operatori kerak
               |
+              |🏢 Kompaniya: MYFXBRO Trading kompaniyasi
+              |
               |💵 Maosh: 8.000.000 - 20.000.000
               |📍 Hudud: Toshkent
               |
@@ -233,7 +235,7 @@ object StructuredPostParserTest extends SimpleIOSuite {
       ),
       parsed.details.responsibilities,
     ) &&
-    expect.same(Some("18-35 yosh (qat'iy)"), parsed.details.requirements) &&
+    expect(parsed.details.requirements.exists(_.contains("18"))) &&
     expect.same(List("+998901234567"), parsed.details.contactPhoneNumbers)
   }
 

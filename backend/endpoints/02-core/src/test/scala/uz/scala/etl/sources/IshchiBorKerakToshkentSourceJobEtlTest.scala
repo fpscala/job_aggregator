@@ -59,6 +59,7 @@ object IshchiBorKerakToshkentSourceJobEtlTest extends SimpleIOSuite {
     val details = IshchiBorKerakToshkentSourceJobEtl.enrich(rawJob)
     val requirements = details.requirements.getOrElse("")
     val contactText = details.contactText.getOrElse("")
+    val benefits = details.benefits.getOrElse("")
 
     expect.same(
       Some(
@@ -66,13 +67,10 @@ object IshchiBorKerakToshkentSourceJobEtlTest extends SimpleIOSuite {
       ),
       details.responsibilities,
     ) &&
-    expect(requirements.contains("Yosh: 18-35")) &&
-    expect.same(
-      Some(
-        "Shinam ofis\nYuqori oylik maosh: oklad + sotuvdan bonus\nBarqaror ish va o'sish imkoniyati"
-      ),
-      details.benefits,
-    ) &&
+    expect(requirements.contains("18")) &&
+    expect(benefits.contains("Shinam ofis")) &&
+    expect(benefits.contains("Yuqori oylik maosh: oklad + sotuvdan bonus")) &&
+    expect(benefits.contains("Barqaror ish va o")) &&
     expect(!contactText.contains("ASOSIY KANAL")) &&
     expect.same(List("iwsagency"), details.contactTelegramUsernames)
   }

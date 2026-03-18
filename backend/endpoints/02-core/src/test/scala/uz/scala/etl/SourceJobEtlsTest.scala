@@ -38,7 +38,7 @@ object SourceJobEtlsTest extends SimpleIOSuite {
 
     val details = SourceJobEtls.enrich(rawJob)
 
-    expect.same(Some("– Chiroyli ovoz va korinishga ega bolish"), details.requirements) &&
+    expect.same(Some("Chiroyli ovoz va korinishga ega bolish"), details.requirements) &&
     expect.same(Some("– 09:00 dan 20:00 gacha"), details.workSchedule) &&
     expect.same(List("+998903187572"), details.contactPhoneNumbers) &&
     expect.same(List("ziyodamamatova"), details.contactTelegramUsernames)

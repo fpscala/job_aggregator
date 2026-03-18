@@ -80,9 +80,6 @@ object IshchiBorKerakToshkentSourceJobEtl extends SourceJobEtl {
       "murojaat",
       "murojaat uchun",
       "telegram",
-      "telefon",
-      "tel",
-      "nomer",
       "kontak",
       "контакты",
       "kompaniya",
@@ -137,6 +134,8 @@ object IshchiBorKerakToshkentSourceJobEtl extends SourceJobEtl {
 
   private val PhoneHeaderMarkers =
     List(
+      "telefon",
+      "tel",
       "nomer",
     )
 
@@ -276,9 +275,18 @@ object IshchiBorKerakToshkentSourceJobEtl extends SourceJobEtl {
 
     JobDetails(
       requirements = mergedRequirements,
-      responsibilities = mergeMultilineValues(base.responsibilities, compact(prepared.about.responsibilities)),
-      benefits = mergeMultilineValues(base.benefits, compact(prepared.about.benefits)),
-      additional = mergeMultilineValues(base.additional, compact(prepared.about.additional)),
+      responsibilities =
+        sanitizeStructuredSection(
+          mergeMultilineValues(base.responsibilities, compact(prepared.about.responsibilities))
+        ),
+      benefits =
+        sanitizeStructuredSection(
+          mergeMultilineValues(base.benefits, compact(prepared.about.benefits))
+        ),
+      additional =
+        sanitizeStructuredSection(
+          mergeMultilineValues(base.additional, compact(prepared.about.additional))
+        ),
       workSchedule = base.workSchedule,
       contactText = sanitizeContactText(base.contactText),
       contactPhoneNumbers =
@@ -391,7 +399,7 @@ object IshchiBorKerakToshkentSourceJobEtl extends SourceJobEtl {
     else line
 
   private def isSectionBoundary(line: String): Boolean =
-    startsWithAny(line, SectionBoundaryMarkers)
+    startsWithAny(line, SectionBoundaryMarkers) || startsWithPhoneHeader(line)
 
   private def isRequirementLike(line: String): Boolean = {
     val key = normalized(line)
@@ -451,6 +459,9 @@ object IshchiBorKerakToshkentSourceJobEtl extends SourceJobEtl {
       )
     }
 
+  private def sanitizeStructuredSection(value: Option[String]): Option[String] =
+    value.flatMap(current => compact(splitMultiline(current).filterNot(isLeakedSectionLabel)))
+
   private def normalizeMultiRoleRequirements(value: Option[String]): Option[String] =
     value.flatMap { current =>
       val lines = splitMultiline(current)
@@ -501,9 +512,11 @@ object IshchiBorKerakToshkentSourceJobEtl extends SourceJobEtl {
 
   private def cleanContentLine(line: String): String =
     normalizeWhitespace(
-      TrailingDecorationPattern.replaceFirstIn(
-        LeadingDecorationPattern.replaceFirstIn(line.replace("\uFE0F", "").replace("\u200D", ""), ""),
-        "",
+      stripBulletPrefix(
+        TrailingDecorationPattern.replaceFirstIn(
+          LeadingDecorationPattern.replaceFirstIn(line.replace("\uFE0F", "").replace("\u200D", ""), ""),
+          "",
+        )
       )
     )
 
@@ -556,6 +569,17 @@ object IshchiBorKerakToshkentSourceJobEtl extends SourceJobEtl {
     }
   }
 
+  private def startsWithPhoneHeader(line: String): Boolean = {
+    val key = normalized(cleanContentLine(line))
+
+    PhoneHeaderMarkers.exists { marker =>
+      key == marker ||
+      key.startsWith(s"$marker:") ||
+      key.startsWith(s"$marker -") ||
+      key.startsWith(s"$marker –")
+    }
+  }
+
   private def isStandaloneRoleHeading(line: String): Boolean = {
     val key = normalized(line)
 
@@ -579,6 +603,19 @@ object IshchiBorKerakToshkentSourceJobEtl extends SourceJobEtl {
     val key = normalized(line)
     PromoNoiseKeywords.exists(key.contains)
   }
+
+  private def isLeakedSectionLabel(line: String): Boolean = {
+    val key = normalized(line)
+    key == "bog'lanish" ||
+    key == "boglanish" ||
+    key == "talablar" ||
+    key == "biz taklif qilamiz" ||
+    key == "ish vaqti" ||
+    key == "manzil"
+  }
+
+  private def stripBulletPrefix(line: String): String =
+    line.replaceFirst("""(?u)^\s*[•▪◦●✔✅❗👤👉➤▶✓\-–—]+\s*""", "")
 
   private def extractTelegramUsernames(text: String): List[String] =
     TelegramUsernamePattern
